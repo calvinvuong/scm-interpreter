@@ -11,7 +11,6 @@
   (lambda (tree state)
     (cond
       [(null? tree) (get-var-value state 'return)]
-      ;;[(null? tree) (error 'error "kill urself lmao")]
       [else (interpret-tree (cdr tree) (M-state (car tree) state))])))
 
 (define list-length-cps
@@ -27,9 +26,10 @@
 (define get-var-value
   (lambda (state var)
     (cond
-      [(null? (car state)) 'null]
-      [(eq? (caar state) var) (caadr state)]
-      [else (get-var-value (cons (cdar state) (list (cdr (car (cdr state))))) var)])))
+      [(null? (car state))                                    (error 'undeclared "Variable not declared.")]
+      [(and (eq? (caar state) var) (eq? (caadr state) 'null)) (error 'error "Using before assigning.")]
+      [(eq? (caar state) var)                                 (caadr state)]
+      [else                                                   (get-var-value (cons (cdar state) (list (cdr (car (cdr state))))) var)])))
 
 (define M-value-cps
   (lambda (expr state return)
@@ -177,9 +177,11 @@
 (define M-state-declare
   (lambda (expr state)
     (cond
+      ;; declare and assign
       [(eq? (list-length expr) 3) (add-to-state (cons (declare-var expr) (list (M-value (caddr expr) state))) state)]
       [(not (eq? (list-length expr) 2))     (error 'error "Invalid declare expression.")]
-      [else                                 (add-to-state (cons (declare-var expr) '('null)) state)])))
+      ;; just declare
+      [else                                 (add-to-state (cons (declare-var expr) '(null)) state)])))
 
 ;; updates the state in variable assignment
 (define M-state-assign
