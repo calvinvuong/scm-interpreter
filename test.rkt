@@ -10,9 +10,15 @@
 (define interpret-tree
   (lambda (tree state)
     (cond
-      [(null? tree) (get-var-value state 'return)]
-      ;;[(null? tree) (error 'error "kill urself lmao")]
+      [(null? tree) (translate-boolean (get-var-value state 'return))]
       [else (interpret-tree (cdr tree) (M-state (car tree) state))])))
+
+(define translate-boolean
+  (lambda (x)
+    (cond
+      [(eq? x #f) 'false]
+      [(eq? x #t) 'true]
+      [else x])))
 
 (define list-length-cps
   (lambda (lis return)
@@ -34,7 +40,7 @@
 (define M-value-cps
   (lambda (expr state return)
     (cond 
-      [(null? expr) (error 'undefined "3ya know jimbo that's not a valid expression")]
+      [(null? expr) (error 'undefined "Empty expression")]
       [(number? expr) (return expr)]
       ;; if expr isn't a pair and isn't a number, it's a variable
       ;; so look it up in the state
@@ -46,8 +52,8 @@
                     state 
                     (lambda (v) (return (* -1 v))))]
       [(eq? (get-operator expr) 'return) (return (add-to-state (cons 'return (list (M-value (exp1 expr) state))) state))]
-      [(eq? (list-length expr) 2) (error 'undefined "4ya know jimbo that's not a valid expression")]
-      [(not (eq? (list-length expr) 3)) (error 'undefined "5ya know jimbo that's not a valid expression")]
+      [(eq? (list-length expr) 2) (error 'undefined "Incorrect number of arguments")]
+      [(not (eq? (list-length expr) 3)) (error 'undefined "Incorrect number of arguments")]
       [(eq? (get-operator expr) '+) 
        (M-value-cps (exp1 expr) 
                     state
@@ -92,7 +98,7 @@
       [(eq? expr 'true) (return #t)]
       [(eq? expr 'false) (return #f)]
       ;;otherwise, this is a variable
-      [(not (list? expr)) (return (get-var-value expr))] 
+      [(not (list? expr)) (return (get-var-value state expr))] 
       [(eq? (get-operator expr) '==) 
        (return (eq? (M-value (exp1 expr) state) (M-value (exp2 expr) state)))]
       [(eq? (get-operator expr) '!=) 
