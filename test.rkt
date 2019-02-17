@@ -77,7 +77,8 @@
                     state
                     (lambda (v1) (M-value-cps (exp2 expr) 
                                               state
-                                              (lambda (v2) (return (remainder v1 v2))))))])))
+                                              (lambda (v2) (return (remainder v1 v2))))))]
+      [else (return (M-boolean expr state))])))
 
 (define M-value
   (lambda (expr state) 
@@ -87,8 +88,11 @@
 (define M-boolean-cps
   (lambda (expr state return)
     (cond
-      [(null? expr) (error 'undefined "1ya know jimbo that's not a valid expression")]
-      [(atom? expr) (error 'undefined "2ya know jimbo that's not a valid expression")]
+      [(null? expr) (error 'undefined "Incorrect number of arguments")]
+      [(eq? expr 'true) (return #t)]
+      [(eq? expr 'false) (return #f)]
+      ;;otherwise, this is a variable
+      [(not (list? expr)) (return (get-var-value expr))] 
       [(eq? (get-operator expr) '==) 
        (return (eq? (M-value (exp1 expr) state) (M-value (exp2 expr) state)))]
       [(eq? (get-operator expr) '!=) 
