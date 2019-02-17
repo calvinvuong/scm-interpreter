@@ -15,41 +15,63 @@
 (define exp1 cadr)
 (define exp2 caddr)
 
-(define math-eval-cps
-  (lambda (expr return)
+(define get-var-value
+  (lambda (state var)
+    (cond
+      [(null? (car state)) 'null]
+      [(eq? (caar state) var) (caadr state)]
+      [else (get-var-value (cons (cdar state) (list (cdr (car (cdr state))))) var)])))
+
+(define M-value-cps
+  (lambda (expr state return)
     (cond 
       [(null? expr) (error 'undefined "ya know jimbo that's not a valid expression")]
       [(number? expr) (return expr)]
+      ;; if expr isn't a pair and isn't a number, it's a variable
+      ;; so look it up in the state
+      [(not (list? expr)) (return (get-var-value state expr))]  
       ;; if next exprression's length is 2, it's unary -
       [(and (eq? (list-length expr) 2)
             (eq? (get-operator expr) '-))
-       (math-eval-cps (exp1 expr) (lambda (v) (return (* -1 v))))]
+       (M-value-cps (exp1 expr) 
+                    state 
+                    (lambda (v) (return (* -1 v))))]
       [(eq? (list-length expr) 2) (error 'undefined "ya know jimbo that's not a valid exprression")]
       [(not (eq? (list-length expr) 3)) (error 'undefined "ya know jimbo that's not a valid exprression")]
       [(eq? (get-operator expr) '+) 
-       (math-eval-cps (exp1 expr) 
-                 (lambda (v1) (math-eval-cps (exp2 expr) 
-                                        (lambda (v2) (return (+ v1 v2))))))]
+       (M-value-cps (exp1 expr) 
+                    state
+                    (lambda (v1) (M-value-cps (exp2 expr) 
+                                              state
+                                              (lambda (v2) (return (+ v1 v2))))))]
       [(eq? (get-operator expr) '-) 
-       (math-eval-cps (exp1 expr) 
-                 (lambda (v1) (math-eval-cps (exp2 expr) 
-                                        (lambda (v2) (return (- v1 v2))))))]
+       (M-value-cps (exp1 expr) 
+                    state
+                    (lambda (v1) (M-value-cps (exp2 expr) 
+                                              state
+                                              (lambda (v2) (return (- v1 v2))))))]
       [(eq? (get-operator expr) '*) 
-       (math-eval-cps (exp1 expr) 
-                 (lambda (v1) (math-eval-cps (exp2 expr) 
-                                        (lambda (v2) (return (* v1 v2))))))]
+       (M-value-cps (exp1 expr) 
+                    state
+                    (lambda (v1) (M-value-cps (exp2 expr) 
+                                              state
+                                              (lambda (v2) (return (* v1 v2))))))]
       [(eq? (get-operator expr) '/) 
-       (math-eval-cps (exp1 expr) 
-                 (lambda (v1) (math-eval-cps (exp2 expr) 
-                                        (lambda (v2) (return (quotient v1 v2))))))]
+       (M-value-cps (exp1 expr) 
+                    state
+                    (lambda (v1) (M-value-cps (exp2 expr) 
+                                              state
+                                              (lambda (v2) (return (quotient v1 v2))))))]
       [(eq? (get-operator expr) '%) 
-       (math-eval-cps (exp1 expr) 
-                 (lambda (v1) (math-eval-cps (exp2 expr) 
-                                        (lambda (v2) (return (remainder v1 v2))))))])))
+       (M-value-cps (exp1 expr) 
+                    state
+                    (lambda (v1) (M-value-cps (exp2 expr) 
+                                              state
+                                              (lambda (v2) (return (remainder v1 v2))))))])))
 
-(define math-eval
-  (lambda (expr) 
-    (math-eval-cps expr (lambda (v) v))))   
+(define M-value
+  (lambda (expr state) 
+    (M-value-cps expr state (lambda (v) v))))   
 
        
 ;; Add a binding to the state
@@ -73,17 +95,17 @@
       [(null? expr) (error 'undefined "ya know jimbo that's not a valid expression")]
       [(atom? expr) (error 'undefined "ya know jimbo that's not a valid expression")]
       [(eq? (get-operator expr) '==) 
-       (return (eq? (math-eval (exp1 expr)) (math-eval (exp2 expr))))]
+       (return (eq? (M-value (exp1 expr) state) (M-value (exp2 expr) state)))]
       [(eq? (get-operator expr) '!=) 
-       (return (not (eq? (math-eval (exp1 expr)) (math-eval (exp2 expr)))))]
+       (return (not (eq? (M-value (exp1 expr) state) (M-value (exp2 expr) state))))]
       [(eq? (get-operator expr) '<) 
-       (return (< (math-eval (exp1 expr)) (math-eval (exp2 expr))))]
+       (return (< (M-value (exp1 expr) state) (M-value (exp2 expr) state)))]
       [(eq? (get-operator expr) '>) 
-       (return (> (math-eval (exp1 expr)) (math-eval (exp2 expr))))]
-      [(eq? (get-operator expr) '>=) 
-       (return (>= (math-eval (exp1 expr)) (math-eval (exp2 expr))))]
+       (return (> (M-value (exp1 expr) state) (M-value (exp2 expr) state)))]
       [(eq? (get-operator expr) '<=) 
-       (return (<= (math-eval (exp1 expr)) (math-eval (exp2 expr))))]
+       (return (<= (M-value (exp1 expr) state) (M-value (exp2 expr) state)))]
+      [(eq? (get-operator expr) '>=) 
+       (return (>= (M-value (exp1 expr) state) (M-value (exp2 expr) state)))]
       [(eq? (get-operator expr) '&&) 
        (M-boolean-cps (exp1 expr) 
                       state
@@ -106,4 +128,4 @@
   (lambda (expr state)
     (M-boolean-cps expr state (lambda (v) v))))
 
-
+(M-boolean '(|| (== (% a 3) 0) (> (+ a b) 12)) '((a c b) (1 2 3)))
