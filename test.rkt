@@ -10,8 +10,8 @@
 (define interpret-tree
   (lambda (tree state)
     (cond
-      [(null? tree) (error 'error "kill urself lmao")]
-      [(eq? (caar tree) 'return) (M-value (cadar tree) state)] 
+      [(null? tree) (get-var-value state 'return)]
+      ;;[(null? tree) (error 'error "kill urself lmao")]
       [else (interpret-tree (cdr tree) (M-state (car tree) state))])))
 
 (define list-length-cps
@@ -45,7 +45,7 @@
        (M-value-cps (exp1 expr) 
                     state 
                     (lambda (v) (return (* -1 v))))]
-      [(eq? (get-operator expr) 'return) (return (M-value (exp1 expr) state))]
+      [(eq? (get-operator expr) 'return) (return (add-to-state (cons 'return (list (M-value (exp1 expr) state))) state))]
       [(eq? (list-length expr) 2) (error 'undefined "4ya know jimbo that's not a valid expression")]
       [(not (eq? (list-length expr) 3)) (error 'undefined "5ya know jimbo that's not a valid expression")]
       [(eq? (get-operator expr) '+) 
@@ -172,16 +172,7 @@
       [(eq? (get-keyword expr) 'return)     (M-state-return expr state)]
       [(eq? (get-keyword expr) 'if)         (M-state-if expr state)]
       [(eq? (get-keyword expr) 'while)      (M-state-while expr state)]
-      [else                                 state]
-      #| [(and (eq? (get-operator car) 'var) |#
-      #|       (eq? (list-length expr) 3)) |#
-      #|  (add-to-state (exp1 expr) (exp2 expr))] |#
-      #| [(and (eq? (get-operator car) '=) |#
-      #|       (eq? (list-length expr) 3)) |#
-      #|  (update-binding (exp1 expr) (exp2 expr))] |#
-      #| [(and (eq? (get-operator expr) 'return) |#
-      #|       (eq? (list-length expr) 2)) |#
-       )))
+      [else                                 state])))
 
 (define M-state-declare
   (lambda (expr state)
@@ -207,13 +198,19 @@
 
 (define conditional cadr)
 (define body caddr)
+(define rest-if cadddr) ; else if statements
 ;; update state if function
 ;; handles side effects
 (define M-state-if
   (lambda (expr state)
-    (if (eq? (M-boolean (conditional expr) state) #t)
-        (M-state (body expr) (M-state (conditional expr) state)) ; return updated state from executing body and evaluating conditional
-        (M-state (conditional expr) state)))) ; return updated state from evaluating conditional
+    (cond
+      [(eq? (M-boolean (conditional expr) state) #t) (M-state (body expr) (M-state (conditional expr) state))]
+      [(> (list-length expr) 3)                      (M-state (rest-if expr) (M-state (conditional expr) state))]
+      [else                                          (M-state (conditional expr) state)])))
+
+;;    (if (eq? (M-boolean (conditional expr) state) #t)
+;;        (M-state (body expr) (M-state (conditional expr) state)) ; return updated state from executing body and evaluating conditional
+;;        (M-state (conditional expr) state)))) ; return updated state from evaluating conditional
         
 
 ;; update state while loop
