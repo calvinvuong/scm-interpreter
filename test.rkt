@@ -11,10 +11,6 @@
   (lambda (lis)
     (list-length-cps lis (lambda (v) v))))
 
-(define get-operator car)
-(define exp1 cadr)
-(define exp2 caddr)
-
 (define math-eval-cps
   (lambda (expr return)
     (cond 
@@ -51,8 +47,6 @@
   (lambda (expr) 
     (math-eval-cps expr (lambda (v) v))))   
 
-(define 
-       
 ;; Add a binding to the state
 (define add-to-state
   (lambda (var val state)
@@ -66,5 +60,45 @@
       [(eq? (car state) a)  (return (cdr state))]
       [else                 (remove-from-state var (cdr state) (lambda (v) (return (cons (car lis) v))))])))
 
-(define  )
+(define M-state
+  (lambda (expr state)
+    (cond
+      [(null? expr)                         (error 'error "Empty expression.")]
+      [(eq? (get-keyword expr) 'var)        (M-state-declare expr state)]
+      [(eq? (get-keyword expr) '=)          (M-state-assign expr state)]
+      [(eq? (get-keyword expr) 'return)     (M-state-return expr state)]
+      [(eq? (get-keyword expr) 'if)         (M-state-if expr state)]
+      [(eq? (get-keyword expr) 'while)      (M-state-while expr state)]
+      #| [(and (eq? (get-operator car) 'var) |#
+      #|       (eq? (list-length expr) 3)) |#
+      #|  (add-to-state (exp1 expr) (exp2 expr))] |#
+      #| [(and (eq? (get-operator car) '=) |#
+      #|       (eq? (list-length expr) 3)) |#
+      #|  (update-binding (exp1 expr) (exp2 expr))] |#
+      #| [(and (eq? (get-operator expr) 'return) |#
+      #|       (eq? (list-length expr) 2)) |#
+       )))
+
+#| (define M-state-declare |#
+#|   (lambda (expr state) |#
+#|     (M-state-declare-cps expr state (lambda (v) v)))) |#
+
+(define M-state-declare
+  (lambda (expr state return)
+    (cond
+      [(not (eq? (list-length expr) 2))     (error 'error "Invalid declare expression.")]
+      [else                                 (add-to-state (declare-var expr) 'null)])))
+
+
+; ----- Macros -----
+
+(define get-operator car)
+(define exp1 cadr)
+(define exp2 caddr)
+
+; M-state
+(define get-keyword car)
+
+; M-state-declare
+(define declare-var car)
 
