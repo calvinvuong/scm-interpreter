@@ -1,4 +1,7 @@
-var x;
-var y;
-x = x + y;
-return x;
+var ben = false;
+var shapiro = true;
+if (ben || !(shapiro))
+    shapiro = ben && (3 < 4);
+else
+    ben = true;
+return ben || shapiro;

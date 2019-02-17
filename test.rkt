@@ -1,5 +1,4 @@
 #lang racket
-
 (require "simpleParser.rkt")
 (parser "testcode")
 
@@ -33,10 +32,9 @@
 (define get-var-value
   (lambda (state var)
     (cond
-      [(null? (car state))                                    (error 'undeclared "Variable not declared.")]
-      [(and (eq? (caar state) var) (eq? (caadr state) 'null)) (error 'error "Using before assigning.")]
-      [(eq? (caar state) var)                                 (caadr state)]
-      [else                                                   (get-var-value (cons (cdar state) (list (cdr (car (cdr state))))) var)])))
+      [(null? (car state)) 'null]
+      [(eq? (caar state) var) (caadr state)]
+      [else (get-var-value (cons (cdar state) (list (cdr (car (cdr state))))) var)])))
 
 (define M-value-cps
   (lambda (expr state return)
@@ -45,6 +43,8 @@
       [(number? expr) (return expr)]
       ;; if expr isn't a pair and isn't a number, it's a variable
       ;; so look it up in the state
+      [(eq? expr 'false) (return #f)]
+      [(eq? expr 'true) (return #t)]
       [(not (list? expr)) (return (get-var-value state expr))]  
       ;; if next exprression's length is 2, it's unary -
       [(and (eq? (list-length expr) 2)
@@ -188,11 +188,9 @@
 (define M-state-declare
   (lambda (expr state)
     (cond
-      ;; declare and assign
       [(eq? (list-length expr) 3) (add-to-state (cons (declare-var expr) (list (M-value (caddr expr) state))) state)]
       [(not (eq? (list-length expr) 2))     (error 'error "Invalid declare expression.")]
-      ;; just declare
-      [else                                 (add-to-state (cons (declare-var expr) '(null)) state)])))
+      [else                                 (add-to-state (cons (declare-var expr) '('null)) state)])))
 
 ;; updates the state in variable assignment
 (define M-state-assign
