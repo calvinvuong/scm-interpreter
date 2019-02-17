@@ -95,9 +95,42 @@
       [(eq? (car s1) var) (update-binding-cps var val (cdr s1) (cdr s2) (lambda (v) (return (cons (cons (car s1) (car v)) (list (cons val (cadr v)))))))]
       [else               (update-binding-cps var val (cdr s1) (cdr s2) (lambda (v) (return (cons (cons (car s1) (car v)) (list (cons (car s2) (cadr v)))))))])))
 
-    
-    
 
+
+;; updates the state in variable assignment
+(define M-state-assign
+  (lambda (expr state)
+    (if (eq? (list-length-cps expr (lambda (v) v)) 3)
+        (update-binding (exp1 expr) (M-value (exp2 expr) state) state)
+        (error 'error "Invalid assign."))))
+
+;; return does not update state, so just pass control to M-value
+;; checks if valid length
+(define M-state-return
+  (lambda (expr state)
+    (if (eq? (list-length-cps expr (lambda (v) v)) 2)
+        (M-value (expr state))
+        (error 'error "Invalid return."))))
+
+(define conditional cadr)
+(define body caddr)
+;; update state if function
+;; handles side effects
+(define M-state-if
+  (lambda (expr state)
+    (if (eq? (M-boolean (conditional expr) state) #t)
+        (M-state (body expr) (M-state (conditional expr) state)) ; return updated state from executing body and evaluating conditional
+        (M-state (conditional expr) state)))) ; return updated state from evaluating conditional
+        
+
+;; update state while loop
+;; handles side effects
+(define M-state-while
+  (lambda (expr state)
+    (if (eq? (M-boolean (conditonal expr) state) #t)
+        (M-state-while-cps expr (M-state (body expr) (M-state (conditional expr) state)))
+        (M-state (conditional expr) state))))
+    
 
 
 
