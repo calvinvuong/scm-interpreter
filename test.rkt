@@ -3,6 +3,17 @@
 (require "simpleParser.rkt")
 (parser "testcode")
 
+(define interpret
+  (lambda (filename)
+    (interpret-tree (parser filename) '(() ()))))
+
+(define interpret-tree
+  (lambda (tree state)
+    (cond
+      [(null? tree) (error 'error "kill urself lmao")]
+      [(eq? (caar tree) 'return) (M-value (cadar tree) state)] 
+      [else (interpret-tree (cdr tree) (M-state (car tree) state))])))
+
 (define list-length-cps
   (lambda (lis return)
     (cond
@@ -12,11 +23,6 @@
 (define list-length
   (lambda (lis)
     (list-length-cps lis (lambda (v) v))))
-
-
-(define get-operator car)
-(define exp1 cadr)
-(define exp2 caddr)
 
 (define get-var-value
   (lambda (state var)
@@ -28,7 +34,7 @@
 (define M-value-cps
   (lambda (expr state return)
     (cond 
-      [(null? expr) (error 'undefined "ya know jimbo that's not a valid expression")]
+      [(null? expr) (error 'undefined "3ya know jimbo that's not a valid expression")]
       [(number? expr) (return expr)]
       ;; if expr isn't a pair and isn't a number, it's a variable
       ;; so look it up in the state
@@ -39,8 +45,9 @@
        (M-value-cps (exp1 expr) 
                     state 
                     (lambda (v) (return (* -1 v))))]
-      [(eq? (list-length expr) 2) (error 'undefined "ya know jimbo that's not a valid exprression")]
-      [(not (eq? (list-length expr) 3)) (error 'undefined "ya know jimbo that's not a valid exprression")]
+      [(eq? (get-operator expr) 'return) (return (M-value (exp1 expr) state))]
+      [(eq? (list-length expr) 2) (error 'undefined "4ya know jimbo that's not a valid expression")]
+      [(not (eq? (list-length expr) 3)) (error 'undefined "5ya know jimbo that's not a valid expression")]
       [(eq? (get-operator expr) '+) 
        (M-value-cps (exp1 expr) 
                     state
@@ -80,8 +87,8 @@
 (define M-boolean-cps
   (lambda (expr state return)
     (cond
-      [(null? expr) (error 'undefined "ya know jimbo that's not a valid expression")]
-      [(atom? expr) (error 'undefined "ya know jimbo that's not a valid expression")]
+      [(null? expr) (error 'undefined "1ya know jimbo that's not a valid expression")]
+      [(atom? expr) (error 'undefined "2ya know jimbo that's not a valid expression")]
       [(eq? (get-operator expr) '==) 
        (return (eq? (M-value (exp1 expr) state) (M-value (exp2 expr) state)))]
       [(eq? (get-operator expr) '!=) 
@@ -165,6 +172,7 @@
       [(eq? (get-keyword expr) 'return)     (M-state-return expr state)]
       [(eq? (get-keyword expr) 'if)         (M-state-if expr state)]
       [(eq? (get-keyword expr) 'while)      (M-state-while expr state)]
+      [else                                 state]
       #| [(and (eq? (get-operator car) 'var) |#
       #|       (eq? (list-length expr) 3)) |#
       #|  (add-to-state (exp1 expr) (exp2 expr))] |#
@@ -175,20 +183,17 @@
       #|       (eq? (list-length expr) 2)) |#
        )))
 
-#| (define M-state-declare |#
-#|   (lambda (expr state) |#
-#|     (M-state-declare-cps expr state (lambda (v) v)))) |#
-
 (define M-state-declare
-  (lambda (expr state return)
+  (lambda (expr state)
     (cond
+      [(eq? (list-length expr) 3) (add-to-state (cons (declare-var expr) (list (M-value (caddr expr) state))) state)]
       [(not (eq? (list-length expr) 2))     (error 'error "Invalid declare expression.")]
-      [else                                 (add-to-state (declare-var expr) 'null)])))
+      [else                                 (add-to-state (cons (declare-var expr) '('null)) state)])))
 
 ;; updates the state in variable assignment
 (define M-state-assign
   (lambda (expr state)
-    (if (eq? (list-length-cps expr (lambda (v) v)) 3)
+    (if (eq? (list-length expr) 3)
         (update-binding (exp1 expr) (M-value (exp2 expr) state) state)
         (error 'error "Invalid assign."))))
 
@@ -196,8 +201,8 @@
 ;; checks if valid length
 (define M-state-return
   (lambda (expr state)
-    (if (eq? (list-length-cps expr (lambda (v) v)) 2)
-        (M-value (expr state))
+    (if (eq? (list-length expr) 2)
+        (M-value expr state)
         (error 'error "Invalid return."))))
 
 (define conditional cadr)
@@ -215,8 +220,8 @@
 ;; handles side effects
 (define M-state-while
   (lambda (expr state)
-    (if (eq? (M-boolean (conditonal expr) state) #t)
-        (M-state-while-cps expr (M-state (body expr) (M-state (conditional expr) state)))
+    (if (eq? (M-boolean (conditional expr) state) #t)
+        (M-state-while expr (M-state (body expr) (M-state (conditional expr) state)))
         (M-state (conditional expr) state))))
  
 
@@ -229,7 +234,7 @@
 (define get-keyword car)
 
 ; M-state-declare
-(define declare-var car)
+(define declare-var cadr)
 
 (define (atom? x) (not (or (pair? x) (null? x))))
 
