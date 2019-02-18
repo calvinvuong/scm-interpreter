@@ -1,3 +1,7 @@
+;; Imran Hossain
+;; Calvin Vuong
+;; Ben Young
+
 #lang racket
 (require "simpleParser.rkt")
 (parser "testcode")
@@ -40,13 +44,13 @@
 (define M-value-cps
   (lambda (expr state return)
     (cond 
-      [(null? expr) (error 'undefined "Empty expression")]
-      [(number? expr) (return expr)]
+      [(null? expr)                     (error 'undefined "Empty expression")]
+      [(number? expr)                   (return expr)]
       ;; if expr isn't a pair and isn't a number, it's a variable
       ;; so look it up in the state
-      [(eq? expr 'false) (return #f)]
-      [(eq? expr 'true) (return #t)]
-      [(not (list? expr)) (return (get-var-value state expr))]  
+      [(eq? expr 'false)                (return #f)]
+      [(eq? expr 'true)                 (return #t)]
+      [(not (list? expr))               (return (get-var-value state expr))]  
       ;; if next exprression's length is 2, it's unary -
       [(and (eq? (list-length expr) 2)
             (eq? (get-operator expr) '-))
@@ -54,8 +58,8 @@
                     state 
                     (lambda (v) (return (* -1 v))))]
       [(eq? (get-operator expr) 'return) (return (add-to-state (cons 'return (list (M-value (exp1 expr) state))) state))]
-      [(eq? (list-length expr) 2) (error 'undefined "Incorrect number of arguments")]
-      [(not (eq? (list-length expr) 3)) (error 'undefined "Incorrect number of arguments")]
+      [(eq? (list-length expr) 2)        (error 'undefined "Incorrect number of arguments")]
+      [(not (eq? (list-length expr) 3))  (error 'undefined "Incorrect number of arguments")]
       [(eq? (get-operator expr) '+) 
        (M-value-cps (exp1 expr) 
                     state
@@ -86,7 +90,7 @@
                     (lambda (v1) (M-value-cps (exp2 expr) 
                                               state
                                               (lambda (v2) (return (remainder v1 v2))))))]
-      [else (return (M-boolean expr state))])))
+      [else                              (return (M-boolean expr state))])))
 
 (define M-value
   (lambda (expr state) 
@@ -96,23 +100,17 @@
 (define M-boolean-cps
   (lambda (expr state return)
     (cond
-      [(null? expr) (error 'undefined "Incorrect number of arguments")]
-      [(eq? expr 'true) (return #t)]
-      [(eq? expr 'false) (return #f)]
+      [(null? expr)                     (error 'undefined "Incorrect number of arguments")]
+      [(eq? expr 'true)                 (return #t)]
+      [(eq? expr 'false)                (return #f)]
       ;;otherwise, this is a variable
-      [(not (list? expr)) (return (get-var-value state expr))] 
-      [(eq? (get-operator expr) '==) 
-       (return (eq? (M-value (exp1 expr) state) (M-value (exp2 expr) state)))]
-      [(eq? (get-operator expr) '!=) 
-       (return (not (eq? (M-value (exp1 expr) state) (M-value (exp2 expr) state))))]
-      [(eq? (get-operator expr) '<) 
-       (return (< (M-value (exp1 expr) state) (M-value (exp2 expr) state)))]
-      [(eq? (get-operator expr) '>) 
-       (return (> (M-value (exp1 expr) state) (M-value (exp2 expr) state)))]
-      [(eq? (get-operator expr) '<=) 
-       (return (<= (M-value (exp1 expr) state) (M-value (exp2 expr) state)))]
-      [(eq? (get-operator expr) '>=) 
-       (return (>= (M-value (exp1 expr) state) (M-value (exp2 expr) state)))]
+      [(not (list? expr))               (return (get-var-value state expr))] 
+      [(eq? (get-operator expr) '==)    (return (eq? (M-value (exp1 expr) state) (M-value (exp2 expr) state)))]
+      [(eq? (get-operator expr) '!=)    (return (not (eq? (M-value (exp1 expr) state) (M-value (exp2 expr) state))))]
+      [(eq? (get-operator expr) '<)     (return (< (M-value (exp1 expr) state) (M-value (exp2 expr) state)))]
+      [(eq? (get-operator expr) '>)     (return (> (M-value (exp1 expr) state) (M-value (exp2 expr) state)))]
+      [(eq? (get-operator expr) '<=)    (return (<= (M-value (exp1 expr) state) (M-value (exp2 expr) state)))]
+      [(eq? (get-operator expr) '>=)    (return (>= (M-value (exp1 expr) state) (M-value (exp2 expr) state)))]
       [(eq? (get-operator expr) '&&) 
        (M-boolean-cps (exp1 expr) 
                       state
@@ -157,8 +155,16 @@
   (lambda (var s1 s2 return)
     (cond
       [(null? s1)         (return '( () () ))]
-      [(eq? (car s1) var) (remove-from-state-cps var (cdr s1) (cdr s2) (lambda (v) (return (cons (car v) (list (cadr v))))))]
-      [else               (remove-from-state-cps var (cdr s1) (cdr s2) (lambda (v) (return (cons (cons (car s1) (car v)) (list (cons (car s2) (cadr v)))))))])))
+      [(eq? (car s1) var) (remove-from-state-cps var
+                                                 (cdr s1)
+                                                 (cdr s2)
+                                                 (lambda (v) (return (cons (car v) (list (cadr v))))))]
+      [else               (remove-from-state-cps var
+                                                 (cdr s1)
+                                                 (cdr s2)
+                                                 (lambda (v) (return (cons
+                                                                      (cons (car s1) (car v))
+                                                                      (list (cons (car s2) (cadr v)))))))])))
 
 ;; update a variable value in state
 ;; wrapper function
@@ -172,8 +178,20 @@
   (lambda (var val s1 s2 return)
     (cond
       [(null? s1)         (return '( () () ))]
-      [(eq? (car s1) var) (update-binding-cps var val (cdr s1) (cdr s2) (lambda (v) (return (cons (cons (car s1) (car v)) (list (cons val (cadr v)))))))]
-      [else               (update-binding-cps var val (cdr s1) (cdr s2) (lambda (v) (return (cons (cons (car s1) (car v)) (list (cons (car s2) (cadr v)))))))])))
+      [(eq? (car s1) var) (update-binding-cps var
+                                              val
+                                              (cdr s1)
+                                              (cdr s2)
+                                              (lambda (v) (return (cons
+                                                                   (cons (car s1) (car v))
+                                                                   (list (cons val (cadr v)))))))]
+      [else               (update-binding-cps var
+                                              val
+                                              (cdr s1)
+                                              (cdr s2)
+                                              (lambda (v) (return (cons
+                                                                   (cons (car s1) (car v))
+                                                                   (list (cons (car s2) (cadr v)))))))])))
 
 (define M-state
   (lambda (expr state)
@@ -247,5 +265,3 @@
 
 (define (atom? x) (not (or (pair? x) (null? x))))
 
-
-(M-boolean '(|| (== (% a 3) 0) (> (+ a b) 12)) '((a c b) (1 2 3)))
