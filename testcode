@@ -1,7 +1,4 @@
-var ben = false;
-var shapiro = true;
-if (ben || !(shapiro))
-    shapiro = ben && (3 < 4);
-else
-    ben = true;
-return ben || shapiro;
+var y = 4;
+var x = 10;
+if ( x != y )
+  return 1;
