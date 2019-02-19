@@ -6,9 +6,11 @@
 (require "simpleParser.rkt")
 (parser "testcode")
 
+(define initialState '(() ()))
+
 (define interpret
   (lambda (filename)
-    (interpret-tree (parser filename) '(() ()))))
+    (interpret-tree (parser filename) initialState)))
 
 (define interpret-tree
   (lambda (tree state)
