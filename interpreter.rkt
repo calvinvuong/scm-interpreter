@@ -4,7 +4,6 @@
 
 #lang racket
 (require "simpleParser.rkt")
-(parser "testcode")
 
 (define initialState '(() ()))
 
