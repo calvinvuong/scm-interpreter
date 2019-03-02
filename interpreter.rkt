@@ -17,7 +17,6 @@
   (lambda (tree state)
     (cond
       [(null? tree) (translate-boolean (get-var-value state 'return))]
-      ;[(null? tree) (display state)]
       [else (interpret-tree (cdr tree) (M-state (car tree) state))])))
 
 ;;turns #f and #t into 'false and 'true for final return
@@ -149,7 +148,7 @@
   (lambda (binding state)
     (if (null? state)
         '()
-        (cons (cons (car binding) (caar state)) (list (cons (box (cadr binding)) (cadar state)))))))
+        (cons (cons (cons (car binding) (caar state)) (list (cons (box (cadr binding)) (cadar state)))) (cdr state)))))
 
 ;; s1 are the list of variable names
 ;; s2 are the list of values
@@ -158,6 +157,7 @@
   (lambda (var val state)
     ; find box holding value and update
     (begin (set-box! (find-box var state) val)
+           ;(display state)
            state)))
 
 
@@ -167,8 +167,9 @@
 (define find-box
   (lambda (var state)
     (call/cc
-     (lambda (k) 
-       (find-box-break var (car state) (cadr state) k)))))
+     (lambda (k)
+         ;(display state)
+       (find-box-break var state k)))))
 
 (define find-box-break
   (lambda (var state break)
@@ -232,8 +233,6 @@
 (define M-state-assign
   (lambda (expr state)
     (if (eq? (list-length expr) 3)
-        ;(display( update-binding (exp1 expr) 
-        ;                (M-value (exp2 expr) state) state))
         (update-binding (exp1 expr) 
                         (M-value (exp2 expr) state) state)
         (error 'error "Invalid assign."))))
