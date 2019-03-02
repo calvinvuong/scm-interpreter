@@ -257,16 +257,22 @@
         (M-value expr state)
         (error 'error "Invalid return."))))
 
-(define conditional cadr)
-(define body caddr)
-(define rest-if cadddr) ; else if statements
+(define conditional 
+  (lambda (expr) 
+      (list (cadr expr))))
+
+(define body 
+  (lambda (expr) 
+      (list (caddr expr))))
+
+(define rest-if cdddr) ; else if statements
 ;; update state if function
 ;; handles side effects
 (define M-state-if
   (lambda (expr state)
     (cond
-      [(eq? (M-boolean (conditional expr) state) #t) (M-state (body expr) 
-                                                              (M-state (conditional expr) state))]
+      [(eq? (M-boolean (car (conditional expr)) state) #t) (M-state (body expr) 
+                                                                    (M-state (conditional expr) state))]
       [(> (list-length expr) 3)                      (M-state (rest-if expr) 
                                                               (M-state (conditional expr) state))]
       [else                                          (M-state (conditional expr) 
