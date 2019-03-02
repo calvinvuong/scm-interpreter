@@ -272,7 +272,7 @@
     (if (eq? (M-boolean (conditional expr) state) #t)
         (M-state-while expr 
                        (M-state (body expr) 
-                                (M-state (conditional expr) state break-return)) break-return)
+                                (M-state (conditional expr) state break-return) break-return) break-return)
         (M-state (conditional expr) state break-return))))
  
 (define block-body cadr)
