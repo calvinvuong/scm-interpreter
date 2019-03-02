@@ -1,6 +1,10 @@
-var x = 5;
-{
- x = 2;
- x = 1;
+var y = 30;
+if ( y % 3 == 0) {
+return y / 3; }
+if ( y % 10 == 0) {
+return y / 10;
 }
-return x;
+if ( y % 30 == 0) {
+ return y / 30;
+}
+ 
