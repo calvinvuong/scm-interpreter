@@ -17,6 +17,7 @@
   (lambda (tree state)
     (cond
       [(null? tree) (translate-boolean (get-var-value state 'return))]
+      ;[(null? tree) (display state)]
       [else (interpret-tree (cdr tree) (M-state (car tree) state))])))
 
 ;;turns #f and #t into 'false and 'true for final return
@@ -38,14 +39,14 @@
   (lambda (lis)
     (list-length-cps lis (lambda (v) v))))
 
-;;returns value of variable in current state
+
+;; returns the value of variable in current state
 (define get-var-value
   (lambda (state var)
     (cond
-      [(null? (car state))                                    (error 'undeclared "Variable not declared.")]
-      [(and (eq? (caar state) var) (eq? (caadr state) 'null)) (error 'error "Using before assigning.")]
-      [(eq? (caar state) var)                                 (caadr state)]
-      [else                                                   (get-var-value (cons (cdar state) (list (cdr (car (cdr state))))) var)])))
+      [(eq? (find-box var state) 'none)            (error 'undeclared "Variable not declared.")]
+      [(eq? (unbox (find-box var state)) 'null)    (error 'undeclared "Using before assigning.")]
+      [else                                        (unbox (find-box var state))])))
 
 ;;returns numeric or boolean value of expression
 (define M-value-cps
@@ -149,58 +150,45 @@
   (lambda (binding state)
     (if (null? state)
         '()
-        (cons (cons (car binding) (car state)) (add-to-state (cdr binding) (cdr state))))))
+        (cons (cons (car binding) (caar state)) (list (cons (box (cadr binding)) (cadar state)))))))
       
 
-;; Remove binding from state
-;; wrapper function
-(define remove-from-state
-  (lambda (var state)
-    (remove-from-state-cps var (car state) (cadr state) (lambda (v) v))))
-
-;; s1 are the variable names
-;; s2 are the values
-(define remove-from-state-cps
-  (lambda (var s1 s2 return)
-    (cond
-      [(null? s1)         (return initialState]
-      [(eq? (car s1) var) (remove-from-state-cps var
-                                                 (cdr s1)
-                                                 (cdr s2)
-                                                 (lambda (v) (return (cons (car v) 
-                                                                           (list (cadr v))))))]
-      [else               (remove-from-state-cps var
-                                                 (cdr s1)
-                                                 (cdr s2)
-                                                 (lambda (v) (return (cons (cons (car s1) (car v))
-                                                                           (list (cons (car s2) (cadr v)))))))])))
-
-;; update a variable value in state
-;; wrapper function
+;; s1 are the list of variable names
+;; s2 are the list of values
+;; returns the state
 (define update-binding
   (lambda (var val state)
-    (update-binding-cps var val (car state) (cadr state) (lambda (v) v))))
+    ; find box holding value and update
+    (begin (set-box! (find-box var state) val)
+           state)))
 
-;; s1 are the variable names
-;; s2 are the values
-(define update-binding-cps
-  (lambda (var val s1 s2 return)
+
+;; find
+;; returns the box of the value of variable v
+;; returns 'none if the value is not found
+(define find-box
+  (lambda (var state)
+    (call/cc
+     (lambda (k) 
+       (find-box-break var (car state) (cadr state) k)))))
+
+(define find-box-break
+  (lambda (var state break)
     (cond
-      [(null? s1)         (return initialState]
-      [(eq? (car s1) var) (update-binding-cps var
-                                              val
-                                              (cdr s1)
-                                              (cdr s2)
-                                              (lambda (v) (return (cons
-                                                                   (cons (car s1) (car v))
-                                                                   (list (cons val (cadr v)))))))]
-      [else               (update-binding-cps var
-                                              val
-                                              (cdr s1)
-                                              (cdr s2)
-                                              (lambda (v) (return (cons
-                                                                   (cons (car s1) (car v))
-                                                                   (list (cons (car s2) (cadr v)))))))])))
+      [(null? state)                                                           'none]
+      [(eq? (find-box-layer-break var (caar state) (cadar state) break) 'none) (find-box-break var (cdr state) break)]
+      [else                                                                    (find-box-layer-break var (caar state) (cadar state) break)])))
+
+; s1 is the list of vars
+; s2 is the list of values
+; finds in the top layer only                 
+(define find-box-layer-break
+  (lambda (var s1 s2 break)
+    (cond
+      [(null? s1)           'none] ; variable not found
+      [(eq? (car s1) var)   (break (car s2))]
+      [else                 (find-box-layer-break var (cdr s1) (cdr s2) break)])))
+                            
 
 ;;calls one of many M-state-** functions depending on nature of input
 (define M-state
@@ -244,6 +232,8 @@
 (define M-state-assign
   (lambda (expr state)
     (if (eq? (list-length expr) 3)
+        ;(display( update-binding (exp1 expr) 
+        ;                (M-value (exp2 expr) state) state))
         (update-binding (exp1 expr) 
                         (M-value (exp2 expr) state) state)
         (error 'error "Invalid assign."))))
@@ -294,4 +284,6 @@
 (define declare-var cadr)
 
 (define (atom? x) (not (or (pair? x) (null? x))))
+
+(interpret "testcode")
 
