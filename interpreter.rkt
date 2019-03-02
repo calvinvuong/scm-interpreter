@@ -17,7 +17,7 @@
   (lambda (tree state)
     (cond
       [(null? tree) (translate-boolean (get-var-value state 'return))]
-      [else (interpret-tree (cdr tree) (M-state (car tree) state))])))
+      [else (get-var-value (M-state tree state) 'return)])))
 
 ;;turns #f and #t into 'false and 'true for final return
 (define translate-boolean
@@ -194,13 +194,25 @@
 (define M-state
   (lambda (expr state)
     (cond
-      [(null? expr)                         (error 'error "Empty expression.")]
-      [(eq? (get-keyword expr) 'var)        (M-state-declare expr state)]
-      [(eq? (get-keyword expr) '=)          (M-state-assign expr state)]
-      [(eq? (get-keyword expr) 'return)     (M-state-return expr state)]
-      [(eq? (get-keyword expr) 'if)         (M-state-if expr state)]
-      [(eq? (get-keyword expr) 'while)      (M-state-while expr state)]
-      [(eq? (get-keyword expr) 'begin)      (M-state-block expr state)]
+      [(null? expr)                         state]
+      [(eq? (get-keyword expr) 'var)        (M-state (cdr expr) 
+                                                     (M-state-declare (car expr) 
+                                                                      state))]
+      [(eq? (get-keyword expr) '=)          (M-state (cdr expr)
+                                                     (M-state-assign (car expr) 
+                                                                     state))]
+      [(eq? (get-keyword expr) 'return)     (M-state (cdr expr) 
+                                                     (M-state-return (car expr) 
+                                                                     state))]
+      [(eq? (get-keyword expr) 'if)         (M-state (cdr expr) 
+                                                     (M-state-if (car expr) 
+                                                                 state))]
+      [(eq? (get-keyword expr) 'while)      (M-state (cdr expr) 
+                                                     (M-state-while (car expr) 
+                                                                    state))]
+      [(eq? (get-keyword expr) 'begin)      (M-state (cdr expr) 
+                                                     (M-state-block (car expr) 
+                                                                    state))]
       [else                                 state])))
 
 ;;helper for var-declared: checked if atom is in list
@@ -270,7 +282,7 @@
                                 (M-state (conditional expr) state)))
         (M-state (conditional expr) state))))
  
-(define block-body cadr)
+(define block-body cdr)
 ;; state with blocks - first add a new layer, then remove it
 (define M-state-block
   (lambda (expr state)
@@ -292,7 +304,7 @@
 (define exp1 cadr)
 (define exp2 caddr)
 
-(define get-keyword car)
+(define get-keyword caar)
 
 ; M-state-declare
 (define declare-var cadr)
