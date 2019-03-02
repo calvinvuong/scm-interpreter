@@ -5,7 +5,7 @@
 #lang racket
 (require "simpleParser.rkt")
 
-(define initialState '(() ()))
+(define initialState '((() ())))
 
 ;;calls interpret-tree on parsed code
 (define interpret
@@ -38,7 +38,6 @@
 (define list-length
   (lambda (lis)
     (list-length-cps lis (lambda (v) v))))
-
 
 ;; returns the value of variable in current state
 (define get-var-value
@@ -151,7 +150,6 @@
     (if (null? state)
         '()
         (cons (cons (car binding) (caar state)) (list (cons (box (cadr binding)) (cadar state)))))))
-      
 
 ;; s1 are the list of variable names
 ;; s2 are the list of values
@@ -176,8 +174,10 @@
   (lambda (var state break)
     (cond
       [(null? state)                                                           'none]
-      [(eq? (find-box-layer-break var (caar state) (cadar state) break) 'none) (find-box-break var (cdr state) break)]
-      [else                                                                    (find-box-layer-break var (caar state) (cadar state) break)])))
+      [(eq? (find-box-layer-break var (caar state) (cadar state) break) 'none)
+       (find-box-break var (cdr state) break)]
+      [else 
+        (find-box-layer-break var (caar state) (cadar state) break)])))
 
 ; s1 is the list of vars
 ; s2 is the list of values
@@ -188,7 +188,6 @@
       [(null? s1)           'none] ; variable not found
       [(eq? (car s1) var)   (break (car s2))]
       [else                 (find-box-layer-break var (cdr s1) (cdr s2) break)])))
-                            
 
 ;;calls one of many M-state-** functions depending on nature of input
 (define M-state
@@ -200,6 +199,7 @@
       [(eq? (get-keyword expr) 'return)     (M-state-return expr state)]
       [(eq? (get-keyword expr) 'if)         (M-state-if expr state)]
       [(eq? (get-keyword expr) 'while)      (M-state-while expr state)]
+      [(eq? (get-keyword expr) 'begin)      (M-state-block expr state)]
       [else                                 state])))
 
 ;;helper for var-declared: checked if atom is in list
@@ -271,8 +271,23 @@
                                 (M-state (conditional expr) state)))
         (M-state (conditional expr) state))))
  
+(define block-body cadr)
+;; state with blocks - first add a new layer, then remove it
+(define M-state-block
+  (lambda (expr state)
+    (remove-layer (M-state (block-body expr)
+                           (push-layer state)))))
+  
+;; Adds a new layer to top of state
+(define push-layer
+  (lambda (state)
+    (cons empty-layer state)))
+
+(define remove-layer cdr)
+
 
 ; ----- Macros -----
+(define empty-layer '(()()))
 
 (define get-operator car)
 (define exp1 cadr)
