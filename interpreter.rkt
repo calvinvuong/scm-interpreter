@@ -163,7 +163,7 @@
 (define remove-from-state-cps
   (lambda (var s1 s2 return)
     (cond
-      [(null? s1)         (return '( () () ))]
+      [(null? s1)         (return initialState]
       [(eq? (car s1) var) (remove-from-state-cps var
                                                  (cdr s1)
                                                  (cdr s2)
@@ -186,7 +186,7 @@
 (define update-binding-cps
   (lambda (var val s1 s2 return)
     (cond
-      [(null? s1)         (return '( () () ))]
+      [(null? s1)         (return initialState]
       [(eq? (car s1) var) (update-binding-cps var
                                               val
                                               (cdr s1)
