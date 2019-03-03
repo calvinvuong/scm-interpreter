@@ -163,6 +163,7 @@
 ;; find
 ;; returns the box of the value of variable v
 ;; returns 'none if the value is not found
+;; uses a break continuation to find first value only
 (define find-box
   (lambda (var state)
     (call/cc
@@ -174,8 +175,10 @@
   (lambda (var state break)
     (cond
       [(null? state)                                                           'none]
+      ; found in first layer
       [(eq? (find-box-layer-break var (caar state) (cadar state) break) 'none)
        (find-box-break var (cdr state) break)]
+      ; search deeper layers
       [else 
         (find-box-layer-break var (caar state) (cadar state) break)])))
 
@@ -194,6 +197,9 @@
   (lambda (expr state break-return break)
     (cond
       [(null? expr)                         state]
+      ;; to handle if (true) or while (true)
+      [(eq? (car expr) 'true)               state]
+      [(eq? (car expr) 'false)              state]
       [(eq? (get-keyword expr) 'var)        (M-state (cdr expr) 
                                                      (M-state-declare (car expr) 
                                                                       state)
@@ -204,10 +210,12 @@
                                                                      state)
                                                      break-return
                                                      break)]
-      ; a "goto" keyword return
+      ; a "goto" construct return
       [(eq? (get-keyword expr) 'return)     (break-return (M-state-return (car expr) state))]
-      ; a "goto" keyword break
-      [(eq? (get-keyword expr) 'break)      (break state)];
+      ; break outside a block
+      [(and (eq? (get-keyword expr) 'break) (null? (remove-layer state)))      (error 'error "Improper break placement.")]
+      ; a "goto" construct break
+      [(eq? (get-keyword expr) 'break)      (break (remove-layer state))]
       
       [(eq? (get-keyword expr) 'if)         (M-state (cdr expr) 
                                                      (M-state-if (car expr) 
@@ -218,12 +226,13 @@
                                                       break)]
    
       [(eq? (get-keyword expr) 'while)      (M-state (cdr expr) 
-                                                     (call/cc
-                                                      (lambda (br) ; br parameter: break continuation
-                                                        (M-state-while (car expr) 
-                                                                    state
-                                                                    break-return
-                                                                    br)))
+                                                     ;(remove-layer ;BIG POTENITIAL DANGER
+                                                      (call/cc
+                                                       (lambda (br) ; br parameter: break continuation
+                                                         (M-state-while (car expr) 
+                                                                        state
+                                                                        break-return
+                                                                        br)))
                                                       break-return
                                                       break)]
       
@@ -297,7 +306,7 @@
                                                                     break-return
                                                                     break)]
       [(> (list-length expr) 3)                      (M-state (rest-if expr) 
-                                                              (M-state (conditional expr) state break-return) break-return break)]
+                                                              (M-state (conditional expr) state break-return break) break-return break)]
       [else                                          (M-state (conditional expr) 
                                                               state
                                                               break-return
@@ -321,10 +330,14 @@
 ;; state with blocks - first add a new layer, then remove it
 (define M-state-block
   (lambda (expr state break-return break)
-    (remove-layer (M-state (block-body expr)
-                           (push-layer state)
-                           break-return
-                           break))))
+       ;(break
+         (remove-layer
+           ;(call/cc
+             ;(lambda (br)
+               (M-state (block-body expr)
+                        (push-layer state)
+                        break-return
+                        break))))
   
 ;; Adds a new layer to top of state
 (define push-layer
