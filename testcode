@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 var x = 0;
 var result = 0;
 
@@ -9,3 +10,9 @@ while (x < 10) {
   x = x + 1;
 }
 return result;
+=======
+var ben = false;
+var shapiro = true;
+
+return ben || shapiro;
+>>>>>>> aa18e27a33a6ff59e84f1ba45586f11689faed53

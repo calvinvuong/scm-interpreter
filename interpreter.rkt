@@ -11,10 +11,10 @@
 ;; r is the continuation for return
 (define interpret
   (lambda (filename)
-    (call/cc
-     (lambda (r) ; continuation for return
-       (M-state (parser filename) initialState r)))))
-
+    (translate-boolean
+      (call/cc
+       (lambda (r) ; continuation for return
+         (M-state (parser filename) initialState r))))))
 
 ;;turns #f and #t into 'false and 'true for final return
 (define translate-boolean
