@@ -9,13 +9,17 @@
 
 ;; calls interpret-tree on parsed code
 ;; r is the continuation for return
-; lambda (v) v is just the "default" continuation for break
+; lambda (v) v is just the "default" continuation for break and continue
 (define interpret
   (lambda (filename)
     (translate-boolean
       (call/cc
        (lambda (r) ; continuation for return
-         (M-state (parser filename) initialState r (lambda (v) v)))))))
+         (M-state (parser filename)
+                  initialState
+                  r
+                  (lambda (v) v)
+                  (lambda (v) v)))))))
 
 
 ;;turns #f and #t into 'false and 'true for final return
@@ -168,7 +172,6 @@
   (lambda (var state)
     (call/cc
      (lambda (k)
-         ;(display state)
        (find-box-break var state k)))))
 
 (define find-box-break
@@ -194,7 +197,7 @@
 
 ;;calls one of many M-state-** functions depending on nature of input
 (define M-state
-  (lambda (expr state break-return break)
+  (lambda (expr state break-return break continue)
     (cond
       [(null? expr)                         state]
       ;; to handle if (true) or while (true)
@@ -204,46 +207,57 @@
                                                      (M-state-declare (car expr) 
                                                                       state)
                                                      break-return
-                                                     break)]
+                                                     break
+                                                     continue)]
+      
       [(eq? (get-keyword expr) '=)          (M-state (cdr expr)
                                                      (M-state-assign (car expr) 
                                                                      state)
                                                      break-return
-                                                     break)]
+                                                     break
+                                                     continue)]
       ; a "goto" construct return
       [(eq? (get-keyword expr) 'return)     (break-return (M-state-return (car expr) state))]
       ; break outside a block
-      [(and (eq? (get-keyword expr) 'break) (null? (remove-layer state)))      (error 'error "Improper break placement.")]
+      [(and (eq? (get-keyword expr) 'break) (null? (remove-layer state))) (error 'error "Improper break placement.")]
       ; a "goto" construct break
       [(eq? (get-keyword expr) 'break)      (break (remove-layer state))]
+      ; a "goto" construct continue
+      [(eq? (get-keyword expr) 'continue)   (continue state)]
       
       [(eq? (get-keyword expr) 'if)         (M-state (cdr expr) 
                                                      (M-state-if (car expr) 
                                                                  state
                                                                  break-return
-                                                                 break)
+                                                                 break
+                                                                 continue)
                                                       break-return
-                                                      break)]
+                                                      break
+                                                      continue)]
    
       [(eq? (get-keyword expr) 'while)      (M-state (cdr expr) 
-                                                     ;(remove-layer ;BIG POTENITIAL DANGER
                                                       (call/cc
                                                        (lambda (br) ; br parameter: break continuation
                                                          (M-state-while (car expr) 
                                                                         state
                                                                         break-return
-                                                                        br)))
+                                                                        br
+                                                                        continue)))
                                                       break-return
-                                                      break)]
+                                                      break
+                                                      continue)]
       
       [(eq? (get-keyword expr) 'begin)      (M-state (cdr expr) 
                                                      (M-state-block (car expr) 
                                                                     state
                                                                     break-return
-                                                                    break)
+                                                                    break
+                                                                    continue)
                                                       break-return
-                                                      break)]
+                                                      break
+                                                      continue)]
       [else                                 state])))
+
 
 ;;helper for var-declared: checked if atom is in list
 (define contains
@@ -297,47 +311,50 @@
 
 (define rest-if cdddr) ; else if statements
 ;; update state if function
-;; handles side effects
 (define M-state-if
-  (lambda (expr state break-return break)
+  (lambda (expr state break-return break continue)
     (cond
       [(eq? (M-boolean (car (conditional expr)) state) #t) (M-state (body expr) 
-                                                                    (M-state (conditional expr) state break-return break)
+                                                                    (M-state (conditional expr) state break-return break continue)
                                                                     break-return
-                                                                    break)]
+                                                                    break
+                                                                    continue)]
       [(> (list-length expr) 3)                      (M-state (rest-if expr) 
-                                                              (M-state (conditional expr) state break-return break) break-return break)]
+                                                              (M-state (conditional expr) state break-return break continue) break-return break continue)]
       [else                                          (M-state (conditional expr) 
                                                               state
                                                               break-return
-                                                              break)])))
+                                                              break
+                                                              continue)])))
 
 
 ;; update state while loop
 (define M-state-while
-  (lambda (expr state break-return break)
+  (lambda (expr state break-return break continue)
     (if (eq? (M-boolean (car (conditional expr)) state) #t)
         (M-state-while expr 
                        (M-state (body expr) 
-                                (M-state (conditional expr) state break-return break)
+                                (M-state (conditional expr) state break-return break continue)
                                 break-return
-                                break)
+                                break
+                                continue)
                        break-return
-                       break)
-        (M-state (conditional expr) state break-return break))))
+                       break
+                       continue)
+        (M-state (conditional expr) state break-return break continue))))
  
 (define block-body cdr)
 ;; state with blocks - first add a new layer, then remove it
 (define M-state-block
-  (lambda (expr state break-return break)
-       ;(break
+  (lambda (expr state break-return break continue)
          (remove-layer
-           ;(call/cc
-             ;(lambda (br)
+           (call/cc 
+             (lambda (cont) ; continuation for continue
                (M-state (block-body expr)
                         (push-layer state)
                         break-return
-                        break))))
+                        break
+                        cont))))))
   
 ;; Adds a new layer to top of state
 (define push-layer

@@ -1,7 +1,10 @@
-var x = 1;
-while (true) {
-  x = x + 1;
-  if (x > 10 && x % 2 == 0)
-   break;
+var x = 3;
+while ( x < 10 ) {
+   x = x + 1;
+   while ( x < 40 ) {
+      x = x + 1;
+      continue;
+      x = 45;
+   }
 }
 return x;
