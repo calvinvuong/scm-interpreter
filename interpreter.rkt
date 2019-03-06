@@ -20,7 +20,7 @@
                   r
                   (lambda (v) v)
                   (lambda (v) v)
-                  (error 'invalid_throw "Not in try/catch. Cannot throw error")))))))
+                  (lambda () (error 'invalid_throw "Not in try/catch. Cannot throw error"))))))))
 
 ;;turns #f and #t into 'false and 'true for final return
 (define translate-boolean
@@ -390,7 +390,7 @@
       [(null? expr) state]
       [else (M-state-try (cdr expr)
                          (M-state (car expr) state break-return break continue throw)
-                         break-return break continue throw)]
+                         break-return break continue throw)])))
 
 (define get-caught-var 
   (lambda (expr) 
@@ -418,7 +418,7 @@
                                                                   (cadr state))
                                                     break-return break continue throw)
                              break-return break continue throw
-                             (lambda (v) v) 'null)]
+                             (lambda (v) v) 'null)])))
 
 (define M-state-catch-recurse
   (lambda (expr state break-return break continue throw)
@@ -441,7 +441,7 @@
                                            throw do-at-end do-at-end-name)]
       [(eq? do-at-end-name 'null) (do-at-end state)]
       [(eq? do-at-end-name 'break-return) (do-at-end (M-state-return (car expr) state))]
-      [(eq? do-at-end-name 'continue) (do-at-end state)]
+      [(eq? do-at-end-name 'continue) (do-at-end state)])))
          
 (define try-block cadr)
 (define catch-block caddr)
