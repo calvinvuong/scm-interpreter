@@ -5,20 +5,22 @@
 #lang racket
 (require "simpleParser.rkt")
 
-(define initialState '(() ()))
+(define initialState '((() ())))
 
-;;calls interpret-tree on parsed code
+;; calls interpret-tree on parsed code
+;; r is the continuation for return
+; lambda (v) v is just the "default" continuation for break and continue
 (define interpret
   (lambda (filename)
-    (interpret-tree (parser filename) initialState)))
+    (translate-boolean
+      (call/cc
+       (lambda (r) ; continuation for return
+         (M-state (parser filename)
+                  initialState
+                  r
+                  (lambda (v) v)
+                  (lambda (v) v)))))))
 
-;;interprets tree from parser
-(define interpret-tree
-  (lambda (tree state)
-    (cond
-      [(null? tree) (translate-boolean (get-var-value state 'return))]
-      ;[(null? tree) (display state)]
-      [else (interpret-tree (cdr tree) (M-state (car tree) state))])))
 
 ;;turns #f and #t into 'false and 'true for final return
 (define translate-boolean
@@ -38,7 +40,6 @@
 (define list-length
   (lambda (lis)
     (list-length-cps lis (lambda (v) v))))
-
 
 ;; returns the value of variable in current state
 (define get-var-value
@@ -65,7 +66,7 @@
        (M-value-cps (exp1 expr) 
                     state 
                     (lambda (v) (return (* -1 v))))]
-      [(eq? (get-operator expr) 'return) (return (add-to-state (cons 'return (list (M-value (exp1 expr) state))) state))]
+      [(eq? (get-operator expr) 'return) (return (M-value (exp1 expr) state))]
       [(eq? (list-length expr) 2)        (error 'undefined "Incorrect number of arguments")]
       [(not (eq? (list-length expr) 3))  (error 'undefined "Incorrect number of arguments")]
       [(eq? (get-operator expr) '+) 
@@ -150,34 +151,39 @@
   (lambda (binding state)
     (if (null? state)
         '()
-        (cons (cons (car binding) (caar state)) (list (cons (box (cadr binding)) (cadar state)))))))
-      
+        (cons (cons (cons (car binding) (caar state)) (list (cons (box (cadr binding)) (cadar state)))) (cdr state)))))
 
 ;; s1 are the list of variable names
 ;; s2 are the list of values
 ;; returns the state
 (define update-binding
   (lambda (var val state)
-    ; find box holding value and update
-    (begin (set-box! (find-box var state) val)
-           state)))
-
+    (cond
+      [(eq? (find-box var state) 'none)            (error 'undeclared "Variable not declared.")]
+      [(eq? (unbox (find-box var state)) 'null)    (error 'undeclared "Using before assigning.")]
+      [else                                        (begin (set-box! (find-box var state) val)
+                                                          state)])))
 
 ;; find
 ;; returns the box of the value of variable v
 ;; returns 'none if the value is not found
+;; uses a break continuation to find first value only
 (define find-box
   (lambda (var state)
     (call/cc
-     (lambda (k) 
-       (find-box-break var (car state) (cadr state) k)))))
+     (lambda (k)
+       (find-box-break var state k)))))
 
 (define find-box-break
   (lambda (var state break)
     (cond
       [(null? state)                                                           'none]
-      [(eq? (find-box-layer-break var (caar state) (cadar state) break) 'none) (find-box-break var (cdr state) break)]
-      [else                                                                    (find-box-layer-break var (caar state) (cadar state) break)])))
+      ; found in first layer
+      [(eq? (find-box-layer-break var (caar state) (cadar state) break) 'none)
+       (find-box-break var (cdr state) break)]
+      ; search deeper layers
+      [else 
+        (find-box-layer-break var (caar state) (cadar state) break)])))
 
 ; s1 is the list of vars
 ; s2 is the list of values
@@ -188,19 +194,70 @@
       [(null? s1)           'none] ; variable not found
       [(eq? (car s1) var)   (break (car s2))]
       [else                 (find-box-layer-break var (cdr s1) (cdr s2) break)])))
-                            
 
 ;;calls one of many M-state-** functions depending on nature of input
 (define M-state
-  (lambda (expr state)
+  (lambda (expr state break-return break continue)
     (cond
-      [(null? expr)                         (error 'error "Empty expression.")]
-      [(eq? (get-keyword expr) 'var)        (M-state-declare expr state)]
-      [(eq? (get-keyword expr) '=)          (M-state-assign expr state)]
-      [(eq? (get-keyword expr) 'return)     (M-state-return expr state)]
-      [(eq? (get-keyword expr) 'if)         (M-state-if expr state)]
-      [(eq? (get-keyword expr) 'while)      (M-state-while expr state)]
+      [(null? expr)                         state]
+      ;; to handle if (true) or while (true)
+      [(eq? (car expr) 'true)               state]
+      [(eq? (car expr) 'false)              state]
+      [(eq? (get-keyword expr) 'var)        (M-state (cdr expr) 
+                                                     (M-state-declare (car expr) 
+                                                                      state)
+                                                     break-return
+                                                     break
+                                                     continue)]
+      
+      [(eq? (get-keyword expr) '=)          (M-state (cdr expr)
+                                                     (M-state-assign (car expr) 
+                                                                     state)
+                                                     break-return
+                                                     break
+                                                     continue)]
+      ; a "goto" construct return
+      [(eq? (get-keyword expr) 'return)     (break-return (M-state-return (car expr) state))]
+      ; break outside a block
+      [(and (eq? (get-keyword expr) 'break) (null? (remove-layer state))) (error 'error "Improper break placement.")]
+      ; a "goto" construct break
+      [(eq? (get-keyword expr) 'break)      (break (remove-layer state))]
+      ; a "goto" construct continue
+      [(eq? (get-keyword expr) 'continue)   (continue state)]
+      
+      [(eq? (get-keyword expr) 'if)         (M-state (cdr expr) 
+                                                     (M-state-if (car expr) 
+                                                                 state
+                                                                 break-return
+                                                                 break
+                                                                 continue)
+                                                      break-return
+                                                      break
+                                                      continue)]
+   
+      [(eq? (get-keyword expr) 'while)      (M-state (cdr expr) 
+                                                      (call/cc
+                                                       (lambda (br) ; br parameter: break continuation
+                                                         (M-state-while (car expr) 
+                                                                        state
+                                                                        break-return
+                                                                        br
+                                                                        continue)))
+                                                      break-return
+                                                      break
+                                                      continue)]
+      
+      [(eq? (get-keyword expr) 'begin)      (M-state (cdr expr) 
+                                                     (M-state-block (car expr) 
+                                                                    state
+                                                                    break-return
+                                                                    break
+                                                                    continue)
+                                                      break-return
+                                                      break
+                                                      continue)]
       [else                                 state])))
+
 
 ;;helper for var-declared: checked if atom is in list
 (define contains
@@ -232,8 +289,6 @@
 (define M-state-assign
   (lambda (expr state)
     (if (eq? (list-length expr) 3)
-        ;(display( update-binding (exp1 expr) 
-        ;                (M-value (exp2 expr) state) state))
         (update-binding (exp1 expr) 
                         (M-value (exp2 expr) state) state)
         (error 'error "Invalid assign."))))
@@ -246,39 +301,77 @@
         (M-value expr state)
         (error 'error "Invalid return."))))
 
-(define conditional cadr)
-(define body caddr)
-(define rest-if cadddr) ; else if statements
+(define conditional 
+  (lambda (expr) 
+      (list (cadr expr))))
+
+(define body 
+  (lambda (expr) 
+      (list (caddr expr))))
+
+(define rest-if cdddr) ; else if statements
 ;; update state if function
-;; handles side effects
 (define M-state-if
-  (lambda (expr state)
+  (lambda (expr state break-return break continue)
     (cond
-      [(eq? (M-boolean (conditional expr) state) #t) (M-state (body expr) 
-                                                              (M-state (conditional expr) state))]
+      [(eq? (M-boolean (car (conditional expr)) state) #t) (M-state (body expr) 
+                                                                    (M-state (conditional expr) state break-return break continue)
+                                                                    break-return
+                                                                    break
+                                                                    continue)]
       [(> (list-length expr) 3)                      (M-state (rest-if expr) 
-                                                              (M-state (conditional expr) state))]
+                                                              (M-state (conditional expr) state break-return break continue) break-return break continue)]
       [else                                          (M-state (conditional expr) 
-                                                              state)])))
+                                                              state
+                                                              break-return
+                                                              break
+                                                              continue)])))
 
 
 ;; update state while loop
 (define M-state-while
-  (lambda (expr state)
-    (if (eq? (M-boolean (conditional expr) state) #t)
+  (lambda (expr state break-return break continue)
+    (if (eq? (M-boolean (car (conditional expr)) state) #t)
         (M-state-while expr 
                        (M-state (body expr) 
-                                (M-state (conditional expr) state)))
-        (M-state (conditional expr) state))))
+                                (M-state (conditional expr) state break-return break continue)
+                                break-return
+                                break
+                                continue)
+                       break-return
+                       break
+                       continue)
+        (M-state (conditional expr) state break-return break continue))))
  
+(define block-body cdr)
+;; state with blocks - first add a new layer, then remove it
+(define M-state-block
+  (lambda (expr state break-return break continue)
+         (remove-layer
+           (call/cc 
+             (lambda (cont) ; continuation for continue
+               (M-state (block-body expr)
+                        (push-layer state)
+                        break-return
+                        break
+                        cont))))))
+  
+;; Adds a new layer to top of state
+(define push-layer
+  (lambda (state)
+    (cons empty-layer state)))
+
+(define remove-layer cdr)
+
 
 ; ----- Macros -----
+(define empty-layer '(()()))
 
 (define get-operator car)
 (define exp1 cadr)
 (define exp2 caddr)
 
-(define get-keyword car)
+(define get-keyword caar)
 
 ; M-state-declare
 (define declare-var cadr)
