@@ -19,8 +19,8 @@
                   initialState
                   r
                   (lambda (v) v)
-                  (lambda (v) v)))))))
-
+                  (lambda (v) v)
+                  (error 'invalid_throw "Not in try/catch. Cannot throw error")))))))
 
 ;;turns #f and #t into 'false and 'true for final return
 (define translate-boolean
@@ -197,7 +197,7 @@
 
 ;;calls one of many M-state-** functions depending on nature of input
 (define M-state
-  (lambda (expr state break-return break continue)
+  (lambda (expr state break-return break continue throw)
     (cond
       [(null? expr)                         state]
       ;; to handle if (true) or while (true)
@@ -208,14 +208,16 @@
                                                                       state)
                                                      break-return
                                                      break
-                                                     continue)]
+                                                     continue
+                                                     throw)]
       
       [(eq? (get-keyword expr) '=)          (M-state (cdr expr)
                                                      (M-state-assign (car expr) 
                                                                      state)
                                                      break-return
                                                      break
-                                                     continue)]
+                                                     continue
+                                                     throw)]
       ; a "goto" construct return
       [(eq? (get-keyword expr) 'return)     (break-return (M-state-return (car expr) state))]
       ; break outside a block
@@ -224,6 +226,7 @@
       [(eq? (get-keyword expr) 'break)      (break (remove-layer state))]
       ; a "goto" construct continue
       [(eq? (get-keyword expr) 'continue)   (continue state)]
+      [(eq? (get-keyword expr) 'throw)      (throw (list (get-throw-value expr) state))]
       
       [(eq? (get-keyword expr) 'if)         (M-state (cdr expr) 
                                                      (M-state-if (car expr) 
@@ -233,7 +236,8 @@
                                                                  continue)
                                                       break-return
                                                       break
-                                                      continue)]
+                                                      continue
+                                                      throw)]
    
       [(eq? (get-keyword expr) 'while)      (M-state (cdr expr) 
                                                       (call/cc
@@ -242,20 +246,37 @@
                                                                         state
                                                                         break-return
                                                                         br
-                                                                        continue)))
+                                                                        continue
+                                                                        throw)))
                                                       break-return
                                                       break
-                                                      continue)]
+                                                      continue
+                                                      throw)]
       
       [(eq? (get-keyword expr) 'begin)      (M-state (cdr expr) 
                                                      (M-state-block (car expr) 
                                                                     state
                                                                     break-return
                                                                     break
-                                                                    continue)
+                                                                    continue
+                                                                    throw)
                                                       break-return
                                                       break
-                                                      continue)]
+                                                      continue
+                                                      throw)]
+
+      [(eq? (get-keyword expr) 'try)      (M-state (cdr expr) 
+                                                     (M-state-trycatchblock 
+                                                       (car expr) 
+                                                       state
+                                                       break-return
+                                                       break
+                                                       continue
+                                                       throw)
+                                                     break-return
+                                                     break
+                                                     continue
+                                                     throw)]
       [else                                 state])))
 
 
@@ -312,41 +333,107 @@
 (define rest-if cdddr) ; else if statements
 ;; update state if function
 (define M-state-if
-  (lambda (expr state break-return break continue)
+  (lambda (expr state break-return break continue throw)
     (cond
       [(eq? (M-boolean (car (conditional expr)) state) #t) (M-state (body expr) 
                                                                     (M-state (conditional expr) state break-return break continue)
                                                                     break-return
                                                                     break
-                                                                    continue)]
+                                                                    continue
+                                                                    throw)]
       [(> (list-length expr) 3)                      (M-state (rest-if expr) 
                                                               (M-state (conditional expr) state break-return break continue) break-return break continue)]
       [else                                          (M-state (conditional expr) 
                                                               state
                                                               break-return
                                                               break
-                                                              continue)])))
+                                                              continue
+                                                              throw)])))
 
+(define M-state-trycatchblock
+  (lambda (expr state break-return break continue throw)
+    (if (and (null? (catch-block expr)) (null? (finally-block expr)))
+      (error 'error "Must have either catch or finally block")
+      (M-state-catch 
+        expr
+        (call/cc
+          (lambda (new-throw)
+            (M-state-try 
+              (try-block expr) 
+              state 
+              (lambda () (M-state-finally break-return))
+              (lambda () (M-state-finally break))
+              (lambda () (M-state-finally continue))
+              new-throw)))
+        (lambda () (M-state-finally break-return))
+        (lambda () (M-state-finally break))
+        (lambda () (M-state-finally continue))
+        (lambda () (M-state-finally throw))))))
+
+(define M-state-try
+  (lambda (expr state break-return break continue throw)
+    (cond
+      [(null? expr) state]
+      [else (M-state-try (cdr expr)
+                         (M-state (car expr) state break-return break continue throw)
+                         break-return break continue throw)]
+
+(define get-caught-var caadr)
+
+(define M-state-catch
+  (lambda (expr state break-return break continue throw)
+    (cond
+      ;;If we threw an exception, state will be input from the call/cc
+      ;;in which case its car is the first argument to catch, which isn't a list
+      ;;so this is the case where we didn't throw an exception
+      [(list? (car state)) (M-state-finally state 
+                                            (finally-block expr)
+                                            break-return break continue throw
+                                            'null)]
+      [else (M-state-finally expr 
+                             (M-state-recurse (catch-block expr))
+                             break-return break continue throw
+                             'null)]
+
+(define M-state-catch-recurse
+  (lambda (expr state break-return break continue throw)
+    (cond
+      [(null? expr) state]
+      [else         (M-state-catch-recurse (cdr expr)
+                                           (M-state (car expr) 
+                                                    state break-return break continue throw)
+                                           break-return break continue throw)])))
+
+(define M-state-finally
+  (lambda (expr state break-return break continue throw do-at-end)
+    (cond
+      [(null? expr) (do-at-end state)]
+         
+(define try-block cadr)
+(define catch-block caddr)
+(define finally-block cadddr)
 
 ;; update state while loop
 (define M-state-while
-  (lambda (expr state break-return break continue)
+  (lambda (expr state break-return break continue throw)
     (if (eq? (M-boolean (car (conditional expr)) state) #t)
         (M-state-while expr 
                        (M-state (body expr) 
-                                (M-state (conditional expr) state break-return break continue)
+                                (M-state (conditional expr) state break-return break continue throw)
                                 break-return
                                 break
-                                continue)
+                                continue
+                                throw)
                        break-return
                        break
-                       continue)
-        (M-state (conditional expr) state break-return break continue))))
+                       continue
+                       throw)
+        (M-state (conditional expr) state break-return break continue throw))))
  
 (define block-body cdr)
 ;; state with blocks - first add a new layer, then remove it
 (define M-state-block
-  (lambda (expr state break-return break continue)
+  (lambda (expr state break-return break continue throw)
          (remove-layer
            (call/cc 
              (lambda (cont) ; continuation for continue
@@ -354,7 +441,8 @@
                         (push-layer state)
                         break-return
                         break
-                        cont))))))
+                        cont
+                        throw))))))
   
 ;; Adds a new layer to top of state
 (define push-layer
@@ -362,6 +450,8 @@
     (cons empty-layer state)))
 
 (define remove-layer cdr)
+
+
 
 
 ; ----- Macros -----
@@ -372,6 +462,7 @@
 (define exp2 caddr)
 
 (define get-keyword caar)
+(define get-throw-value cadar)
 
 ; M-state-declare
 (define declare-var cadr)
