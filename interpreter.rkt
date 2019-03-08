@@ -367,10 +367,11 @@
             (M-state-try 
               (try-block expr) 
               state 
-              (lambda (return-statement) (M-state-finally (finally-expression expr) state break-return 
-                                          break continue throw 
-                                          break-return 
-                                          (list 'break-return return-statement)))
+              (lambda (return-statement) (M-state-finally (finally-expression expr) 
+                                                          state break-return 
+                                                          break continue throw 
+                                                          break-return 
+                                                          (list 'break-return return-statement)))
               (lambda (v) (M-state-finally (finally-expression expr) 
                                           state break-return 
                                           break continue throw 
@@ -419,10 +420,9 @@
 (define M-state-catch
   (lambda (expr state break-return break continue throw)
     (cond
-      ;; FIXME
       [(null? (catch-block expr)) (M-state-finally (finally-expression expr)
-                                                   (remove-layer state)
-                                                   break-return break continue throw
+                                                   state break-return 
+                                                   break continue throw
                                                    (lambda (v) v) 'null)]
       ;;If we threw an exception, state will be input from the call/cc
       ;;in which case its car is the first argument to catch, which isn't a list
