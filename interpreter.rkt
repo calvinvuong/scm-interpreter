@@ -14,13 +14,16 @@
   (lambda (filename)
     (translate-boolean
       (call/cc
-       (lambda (r) ; continuation for return
+       (lambda (return) ; continuation for return
+         ;;(M-state expr state return break continue throw)
+         ;;initially break, continue, and throw should give errors
+         ;;because we aren't in a structure where we can call them
          (M-state (parser filename)
                   initialState
-                  r
+                  return
                   (lambda (v) (error 'error "Improper break placement."))
-                  (lambda (v) v)
-                  (lambda (v) (error 'invalid_throw "Not in try/catch. Cannot throw error"))))))))
+                  (lambda (v) (error 'error "Improper continue placement"))
+                  (lambda (v) (error 'invalid_throw "Not in try/catch. Cannot throw exception"))))))))
 
 ;;turns #f and #t into 'false and 'true for final return
 (define translate-boolean
@@ -368,31 +371,38 @@
                                           break continue throw 
                                           break-return 
                                           (list 'break-return return-statement)))
-              (lambda () (M-state-finally (finally-expression expr) state break-return 
+              (lambda (v) (M-state-finally (finally-expression expr) 
+                                          state break-return 
                                           break continue throw 
                                           break 'break))
-              (lambda () (M-state-finally (finally-expression expr) state break-return 
+              (lambda (v) (M-state-finally (finally-expression expr) 
+                                          state break-return 
                                           break continue throw 
                                           continue 'continue))
               throw)
-        (lambda (return-statement) (M-state-finally (finally-expression expr) state break-return 
-                                    break continue throw 
-                                    break-return (list 'break-return return-statement)))
-        (lambda () (M-state-finally (finally-expression expr) state break-return 
-                                    break continue throw 
-                                    break 'break))
-        (lambda () (M-state-finally (finally-expression expr) state break-return 
-                                    break continue throw 
-                                    continue 'continue))
-        (lambda (throw-statement) (M-state-finally (finally-expression expr) state break-return 
-                                    break continue throw 
-                                    throw (list 'throw throw-statement)))))))
+        (lambda (return-statement) (M-state-finally (finally-expression expr) 
+                                                    state break-return 
+                                                    break continue throw 
+                                                    break-return 
+                                                    (list 'break-return return-statement)))
+        (lambda (v) (M-state-finally (finally-expression expr) 
+                                     state break-return 
+                                     break continue throw 
+                                     break 'break))
+        (lambda (v) (M-state-finally (finally-expression expr) 
+                                     state break-return 
+                                     break continue throw 
+                                     continue 'continue))
+        (lambda (throw-statement) (M-state-finally (finally-expression expr) 
+                                                   state break-return 
+                                                   break continue throw 
+                                                   throw (list 'throw throw-statement)))))))
 
 (define M-state-try
   (lambda (expr state break-return break continue throw)
     (call/cc
      (lambda (new-throw)
-       (M-state-block (cons 'begin expr) state break-return break continue new-throw)))))
+       (M-state-trycatchexpr (cons 'begin expr) state break-return break continue new-throw)))))
 
 (define get-caught-var 
   (lambda (expr) 
@@ -433,7 +443,7 @@
 
 (define M-state-catch-recurse
   (lambda (expr state break-return break continue throw)
-    (M-state-block (cons 'begin expr) state break-return break continue throw)))
+    (M-state-trycatchexpr (cons 'begin expr) state break-return break continue throw)))
 
 (define M-state-finally-recurse
   (lambda (expr state break-return break continue throw do-at-end do-at-end-name)
@@ -452,13 +462,26 @@
       [(and (list? do-at-end-name)
             (eq? (car do-at-end-name) 'throw))
        (do-at-end (cadr do-at-end-name))]
-      [(eq? do-at-end-name 'continue) (do-at-end state)])))
+      [(eq? do-at-end-name 'continue) (do-at-end state)]
+      [(eq? do-at-end-name 'break) (do-at-end state)])))
 
 (define M-state-finally
   (lambda (expr state break-return break continue throw do-at-end do-at-end-name)
     (remove-layer (M-state-finally-recurse
                     expr (push-layer state) break-return break continue throw do-at-end do-at-end-name))))
          
+;;Like M-state-block, but we don't overwrite the continue continuation.
+;;Used for what would be the 'block' inside try and catch
+(define M-state-trycatchexpr
+  (lambda (expr state break-return break continue throw)
+         (remove-layer
+               (M-state (block-body expr)
+                        (push-layer state)
+                        break-return
+                        break
+                        continue
+                        throw))))
+
 (define try-block cadr)
 (define catch-block caddr)
 (define finally-block cadddr)
@@ -494,6 +517,8 @@
                         break
                         cont
                         throw))))))
+
+  
   
 ;; Adds a new layer to top of state
 (define push-layer
@@ -521,4 +546,3 @@
 (define (atom? x) (not (or (pair? x) (null? x))))
 
 (interpret "testcode")
-
