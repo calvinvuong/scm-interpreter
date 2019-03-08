@@ -18,7 +18,7 @@
          (M-state (parser filename)
                   initialState
                   r
-                  (lambda (v) v)
+                  (lambda (v) (error 'error "Improper break placement."))
                   (lambda (v) v)
                   (lambda (v) (error 'invalid_throw "Not in try/catch. Cannot throw error"))))))))
 
@@ -160,7 +160,7 @@
   (lambda (var val state)
     (cond
       [(eq? (find-box var state) 'none)            (error 'undeclared "Variable not declared.")]
-      ;; TODO fix this
+      ;; FIXME
       ;;[(eq? (unbox (find-box var state)) 'null)    (error 'undeclared "Using before assigning.")]
       [else                                        (begin (set-box! (find-box var state) val)
                                                           state)])))
@@ -221,8 +221,6 @@
                                                      throw)]
       ; a "goto" construct return
       [(eq? (get-keyword expr) 'return)     (break-return (M-state-return (car expr) state))]
-      ; break outside a block
-      [(and (eq? (get-keyword expr) 'break) (null? (remove-layer state))) (error 'error "Improper break placement.")]
       ; a "goto" construct break
       [(eq? (get-keyword expr) 'break)      (break (remove-layer state))]
       ; a "goto" construct continue
@@ -376,7 +374,7 @@
               (lambda () (M-state-finally (finally-expression expr) state break-return 
                                           break continue throw 
                                           continue 'continue))
-              throw)))
+              throw)
         (lambda (return-statement) (M-state-finally (finally-expression expr) state break-return 
                                     break continue throw 
                                     break-return (list 'break-return return-statement)))
@@ -386,9 +384,10 @@
         (lambda () (M-state-finally (finally-expression expr) state break-return 
                                     break continue throw 
                                     continue 'continue))
-        (lambda (v) (M-state-finally (finally-expression expr) state break-return 
+        (lambda (throw-statement) (M-state-finally (finally-expression expr) state break-return 
                                     break continue throw 
-                                    throw 'throw))))))
+                                    throw (list 'throw throw-statement)))))))
+
 (define M-state-try
   (lambda (expr state break-return break continue throw)
     (call/cc
@@ -403,14 +402,16 @@
     (caddr (catch-block expr))))
 (define finally-expression
   (lambda (expr)
-    (cadr (finally-block expr))))
+    (if (null? (finally-block expr))
+      '()
+      (cadr (finally-block expr)))))
 
 (define M-state-catch
   (lambda (expr state break-return break continue throw)
     (cond
       ;; FIXME
       [(null? (catch-block expr)) (M-state-finally (finally-expression expr)
-                                                   (cadr state)
+                                                   (remove-layer state)
                                                    break-return break continue throw
                                                    (lambda (v) v) 'null)]
       ;;If we threw an exception, state will be input from the call/cc
@@ -432,22 +433,31 @@
 
 (define M-state-catch-recurse
   (lambda (expr state break-return break continue throw)
-    (M-state-block (cons 'begin (caddr expr)) state break-return break continue throw)))
+    (M-state-block (cons 'begin expr) state break-return break continue throw)))
+
+(define M-state-finally-recurse
+  (lambda (expr state break-return break continue throw do-at-end do-at-end-name)
+    (cond 
+      [(not (null? expr)) (M-state-finally-recurse (cdr expr) 
+                                                   (M-state (list (car expr))
+                                                            state break-return
+                                                            break continue throw)
+                                                   break-return break continue 
+                                                   throw do-at-end do-at-end-name)]
+      [(eq? do-at-end-name 'null) (do-at-end state)]
+      ;;if do-at-end-name is a list, then this is a return
+      [(and (list? do-at-end-name)
+            (eq? (car do-at-end-name) 'break-return)) 
+       (do-at-end (M-state-return (list 'return (cadr do-at-end-name)) state))]
+      [(and (list? do-at-end-name)
+            (eq? (car do-at-end-name) 'throw))
+       (do-at-end (cadr do-at-end-name))]
+      [(eq? do-at-end-name 'continue) (do-at-end state)])))
 
 (define M-state-finally
   (lambda (expr state break-return break continue throw do-at-end do-at-end-name)
-    (cond 
-      [(eq? do-at-end-name 'throw) (error 'error "No catch block for error!")]
-      [(not (null? expr)) (M-state-finally (cdr expr) 
-                                           (M-state (list (car expr))
-                                                    state break-return
-                                                    break continue throw)
-                                           break-return break continue 
-                                           throw do-at-end do-at-end-name)]
-      [(eq? do-at-end-name 'null) (do-at-end state)]
-      ;;if do-at-end-name is a list, then this is a return
-      [(list? do-at-end-name) (do-at-end (M-state-return (list 'return (cadr do-at-end-name)) state))]
-      [(eq? do-at-end-name 'continue) (do-at-end state)])))
+    (remove-layer (M-state-finally-recurse
+                    expr (push-layer state) break-return break continue throw do-at-end do-at-end-name))))
          
 (define try-block cadr)
 (define catch-block caddr)
