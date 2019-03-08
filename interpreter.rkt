@@ -49,7 +49,7 @@
   (lambda (state var)
     (cond
       [(eq? (find-box var state) 'none)            (error 'undeclared "Variable not declared.")]
-      [(eq? (unbox (find-box var state)) 'null)    (error 'undeclared "Using before assigning.")]
+      [(eq? (unbox (find-box var state)) 'null)    (error 'uninitialized "Using before assigning.")]
       [else                                        (unbox (find-box var state))])))
 
 ;;returns numeric or boolean value of expression
@@ -283,19 +283,12 @@
       [else                                 state])))
 
 
-;;helper for var-declared: checked if atom is in list
-(define contains
-  (lambda (a lis)
-    (cond
-      [(null? lis) #f]
-      [(eq? a (car lis)) #t]
-      [else (contains a (cdr lis))]))) 
-
 ;;checks to see if var is arleady declared in this state
 ;;For use in M-state-declare
 (define var-declared
   (lambda (var state)
-    (contains var (car state)))) 
+    (not (eq? (find-box var state) 'none))))
+
 
 ;;Updates state for a variable declaration
 (define M-state-declare
