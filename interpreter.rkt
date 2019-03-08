@@ -379,11 +379,11 @@
                                                     break-return 
                                                     (list 'break-return return-statement)))
         (lambda (v) (M-state-finally (finally-expression expr) 
-                                     state break-return 
+                                     (remove-layer state) break-return 
                                      break continue throw 
                                      break 'break))
         (lambda (v) (M-state-finally (finally-expression expr) 
-                                     state break-return 
+                                     (remove-layer state) break-return 
                                      break continue throw 
                                      continue 'continue))
         (lambda (throw-statement) (M-state-finally (finally-expression expr) 
