@@ -228,7 +228,7 @@
       [(eq? (get-keyword expr) 'break)      (break (remove-layer state))]
       ; a "goto" construct continue
       [(eq? (get-keyword expr) 'continue)   (continue state)]
-      [(eq? (get-keyword expr) 'throw)      (throw (list (get-throw-value expr) state))]
+      [(eq? (get-keyword expr) 'throw)      (throw (list (get-throw-value expr state) state))]
       
       [(eq? (get-keyword expr) 'if)         (M-state (cdr expr) 
                                                      (M-state-if (car expr) 
@@ -295,7 +295,7 @@
 ;;For use in M-state-declare
 (define var-declared
   (lambda (var state)
-    (contains var (car state)))) 
+    (not (eq? (find-box var state) 'none))))
 
 ;;Updates state for a variable declaration
 (define M-state-declare
@@ -373,11 +373,11 @@
                                                           break-return 
                                                           (list 'break-return return-statement)))
               (lambda (v) (M-state-finally (finally-expression expr) 
-                                          state break-return 
+                                          (remove-layer state) break-return 
                                           break continue throw 
                                           break 'break))
               (lambda (v) (M-state-finally (finally-expression expr) 
-                                          state break-return 
+                                          (remove-layer state) break-return 
                                           break continue throw 
                                           continue 'continue))
               throw)
@@ -408,6 +408,7 @@
 (define get-caught-var 
   (lambda (expr) 
     (caadr (catch-block expr))))
+
 (define catch-expression
   (lambda (expr)
     (caddr (catch-block expr))))
@@ -420,6 +421,7 @@
 (define M-state-catch
   (lambda (expr state break-return break continue throw)
     (cond
+      ;; FIXME
       [(null? (catch-block expr)) (M-state-finally (finally-expression expr)
                                                    state break-return 
                                                    break continue throw
@@ -538,7 +540,10 @@
 (define exp2 caddr)
 
 (define get-keyword caar)
-(define get-throw-value cadar)
+
+(define get-throw-value 
+  (lambda (expr state)
+    (M-value (cadar expr) state)))
 
 ; M-state-declare
 (define declare-var cadr)
