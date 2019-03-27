@@ -3,7 +3,7 @@
 ;; Ben Young
 
 #lang racket
-(require "simpleParser.rkt")
+(require "functionParser.rkt")
 
 (define initialState '((() ())))
 
