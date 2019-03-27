@@ -21,9 +21,12 @@
          (M-state (parser filename)
                   initialState
                   return
-                  (lambda (v) (error 'error "Improper break placement."))
-                  (lambda (v) (error 'error "Improper continue placement"))
-                  (lambda (v) (error 'invalid_throw "Not in try/catch. Cannot throw exception"))))))))
+                  (lambda (v) 
+                    (error 'error "Improper break placement."))
+                  (lambda (v) 
+                    (error 'error "Improper continue placement"))
+                  (lambda (v) 
+                    (error 'invalid_throw "Not in try/catch. Cannot throw exception"))))))))
 
 ;;turns #f and #t into 'false and 'true for final return
 (define translate-boolean
@@ -38,7 +41,8 @@
   (lambda (lis return)
     (cond
       [(null? lis) (return 0)]
-      [else (list-length-cps (cdr lis) (lambda (v) (return (+ 1 v))))])))
+      [else (list-length-cps (cdr lis) (lambda (v) 
+                                         (return (+ 1 v))))])))
 
 (define list-length
   (lambda (lis)
@@ -68,41 +72,52 @@
             (eq? (get-operator expr) '-))
        (M-value-cps (exp1 expr) 
                     state 
-                    (lambda (v) (return (* -1 v))))]
+                    (lambda (v) 
+                      (return (* -1 v))))]
       [(eq? (get-operator expr) 'return) (return (M-value (exp1 expr) state))]
       [(eq? (list-length expr) 2)        (error 'undefined "Incorrect number of arguments")]
       [(not (eq? (list-length expr) 3))  (error 'undefined "Incorrect number of arguments")]
       [(eq? (get-operator expr) '+) 
        (M-value-cps (exp1 expr) 
                     state
-                    (lambda (v1) (M-value-cps (exp2 expr) 
-                                              state
-                                              (lambda (v2) (return (+ v1 v2))))))]
+                    (lambda (v1) 
+                      (M-value-cps (exp2 expr) 
+                                   state
+                                   (lambda (v2) 
+                                     (return (+ v1 v2))))))]
       [(eq? (get-operator expr) '-) 
        (M-value-cps (exp1 expr) 
                     state
-                    (lambda (v1) (M-value-cps (exp2 expr) 
-                                              state
-                                              (lambda (v2) (return (- v1 v2))))))]
+                    (lambda (v1) 
+                      (M-value-cps (exp2 expr) 
+                                   state
+                                   (lambda (v2) 
+                                     (return (- v1 v2))))))]
       [(eq? (get-operator expr) '*) 
        (M-value-cps (exp1 expr) 
                     state
-                    (lambda (v1) (M-value-cps (exp2 expr) 
-                                              state
-                                              (lambda (v2) (return (* v1 v2))))))]
+                    (lambda (v1) 
+                      (M-value-cps (exp2 expr) 
+                                   state
+                                   (lambda (v2) 
+                                     (return (* v1 v2))))))]
       [(eq? (get-operator expr) '/) 
        (M-value-cps (exp1 expr) 
                     state
-                    (lambda (v1) (M-value-cps (exp2 expr) 
-                                              state
-                                              (lambda (v2) (return (quotient v1 v2))))))]
+                    (lambda (v1) 
+                      (M-value-cps (exp2 expr) 
+                                   state
+                                   (lambda (v2) 
+                                     (return (quotient v1 v2))))))]
       [(eq? (get-operator expr) '%) 
        (M-value-cps (exp1 expr) 
                     state
-                    (lambda (v1) (M-value-cps (exp2 expr) 
-                                              state
-                                              (lambda (v2) (return (remainder v1 v2))))))]
-      [else                              (return (M-boolean expr state))])))
+                    (lambda (v1) 
+                      (M-value-cps (exp2 expr) 
+                                   state
+                                   (lambda (v2) 
+                                     (return (remainder v1 v2))))))]
+      [else (return (M-boolean expr state))])))
 
 ;;calls M-value-cps
 (define M-value
@@ -128,19 +143,24 @@
       [(eq? (get-operator expr) '&&) 
        (M-boolean-cps (exp1 expr) 
                       state
-                      (lambda (v1) (M-boolean-cps (exp2 expr) 
-                                                  state
-                                                  (lambda (v2) (return (and v1 v2))))))]
+                      (lambda (v1) 
+                        (M-boolean-cps (exp2 expr) 
+                                       state
+                                       (lambda (v2) 
+                                         (return (and v1 v2))))))]
       [(eq? (get-operator expr) '||) 
        (M-boolean-cps (exp1 expr) 
                       state
-                      (lambda (v1) (M-boolean-cps (exp2 expr) 
-                                                  state
-                                                  (lambda (v2) (return (or v1 v2))))))]
+                      (lambda (v1) 
+                        (M-boolean-cps (exp2 expr) 
+                                       state
+                                       (lambda (v2) 
+                                         (return (or v1 v2))))))]
       [(eq? (get-operator expr) '!) 
        (M-boolean-cps (exp1 expr) 
                       state
-                      (lambda (v) (return (not v))))])))
+                      (lambda (v) 
+                        (return (not v))))])))
       
 ;;calls M-boolean-cps
 (define M-boolean
@@ -359,37 +379,44 @@
             (M-state-try 
               (try-block expr) 
               state 
-              (lambda (return-statement) (M-state-finally (finally-expression expr) 
-                                                          state break-return 
-                                                          break continue throw 
-                                                          break-return 
-                                                          (list 'break-return return-statement)))
-              (lambda (v) (M-state-finally (finally-expression expr) 
-                                          (remove-layer state) break-return 
-                                          break continue throw 
-                                          break 'break))
-              (lambda (v) (M-state-finally (finally-expression expr) 
-                                          (remove-layer state) break-return 
-                                          break continue throw 
-                                          continue 'continue))
+              (lambda (return-statement) 
+                (M-state-finally (finally-expression expr) 
+                                 state break-return 
+                                 break continue throw 
+                                 break-return 
+                                 (list 'break-return return-statement)))
+              (lambda (v) 
+                (M-state-finally (finally-expression expr) 
+                                 (remove-layer state) break-return 
+                                 break continue throw 
+                                 break 'break))
+              (lambda (v) 
+                (M-state-finally (finally-expression expr) 
+                                 (remove-layer state) break-return 
+                                 break continue throw 
+                                 continue 'continue))
               throw)
-        (lambda (return-statement) (M-state-finally (finally-expression expr) 
-                                                    state break-return 
-                                                    break continue throw 
-                                                    break-return 
-                                                    (list 'break-return return-statement)))
-        (lambda (v) (M-state-finally (finally-expression expr) 
-                                     (remove-layer state) break-return 
-                                     break continue throw 
-                                     break 'break))
-        (lambda (v) (M-state-finally (finally-expression expr) 
-                                     (remove-layer state) break-return 
-                                     break continue throw 
-                                     continue 'continue))
-        (lambda (throw-statement) (M-state-finally (finally-expression expr) 
-                                                   state break-return 
-                                                   break continue throw 
-                                                   throw (list 'throw throw-statement)))))))
+        (lambda (return-statement) 
+          (M-state-finally (finally-expression expr) 
+                           state break-return 
+                           break continue throw 
+                           break-return 
+                           (list 'break-return return-statement)))
+        (lambda (v) 
+          (M-state-finally (finally-expression expr) 
+                           (remove-layer state) break-return 
+                           break continue throw 
+                           break 'break))
+        (lambda (v) 
+          (M-state-finally (finally-expression expr) 
+                           (remove-layer state) break-return 
+                           break continue throw 
+                           continue 'continue))
+        (lambda (throw-statement)
+          (M-state-finally (finally-expression expr) 
+                           state break-return 
+                           break continue throw 
+                           throw (list 'throw throw-statement)))))))
 
 (define M-state-try
   (lambda (expr state break-return break continue throw)
