@@ -1,2 +1,10 @@
-var x = 10;
-var result = 1;
+var x = 4;
+var y = 6 + x;
+
+function main(v, w) {
+  var a = 5;
+  function hello (b) {
+     a = a + 5;
+  }
+  return x + y + a;
+}
