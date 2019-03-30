@@ -3,7 +3,7 @@
 ;; Ben Young
 
 #lang racket
-(require "functionParser.rkt")
+(require "simpleParser.rkt")
 
 (define initialState '((() ())))
 
@@ -56,6 +56,7 @@
       [(eq? (unbox (find-box var state)) 'null)    (error 'uninitialized "Using before assigning.")]
       [else                                        (unbox (find-box var state))])))
 
+
 ;;returns numeric or boolean value of expression
 (define M-value-cps
   (lambda (expr state return)
@@ -74,49 +75,16 @@
                     state 
                     (lambda (v) 
                       (return (* -1 v))))]
+      ;;function
+      ;;[(eq? (get-operator expr) 'funcall (return 
       [(eq? (get-operator expr) 'return) (return (M-value (exp1 expr) state))]
       [(eq? (list-length expr) 2)        (error 'undefined "Incorrect number of arguments")]
       [(not (eq? (list-length expr) 3))  (error 'undefined "Incorrect number of arguments")]
-      [(eq? (get-operator expr) '+) 
-       (M-value-cps (exp1 expr) 
-                    state
-                    (lambda (v1) 
-                      (M-value-cps (exp2 expr) 
-                                   state
-                                   (lambda (v2) 
-                                     (return (+ v1 v2))))))]
-      [(eq? (get-operator expr) '-) 
-       (M-value-cps (exp1 expr) 
-                    state
-                    (lambda (v1) 
-                      (M-value-cps (exp2 expr) 
-                                   state
-                                   (lambda (v2) 
-                                     (return (- v1 v2))))))]
-      [(eq? (get-operator expr) '*) 
-       (M-value-cps (exp1 expr) 
-                    state
-                    (lambda (v1) 
-                      (M-value-cps (exp2 expr) 
-                                   state
-                                   (lambda (v2) 
-                                     (return (* v1 v2))))))]
-      [(eq? (get-operator expr) '/) 
-       (M-value-cps (exp1 expr) 
-                    state
-                    (lambda (v1) 
-                      (M-value-cps (exp2 expr) 
-                                   state
-                                   (lambda (v2) 
-                                     (return (quotient v1 v2))))))]
-      [(eq? (get-operator expr) '%) 
-       (M-value-cps (exp1 expr) 
-                    state
-                    (lambda (v1) 
-                      (M-value-cps (exp2 expr) 
-                                   state
-                                   (lambda (v2) 
-                                     (return (remainder v1 v2))))))]
+      [(eq? (get-operator expr) '+) (M-value-math-operator expr state + return)]
+      [(eq? (get-operator expr) '-) (M-value-math-operator expr state - return)]
+      [(eq? (get-operator expr) '*) (M-value-math-operator expr state * return)]
+      [(eq? (get-operator expr) '/) (M-value-math-operator expr state quotient return)]
+      [(eq? (get-operator expr) '%) (M-value-math-operator expr state remainder return)]
       [else (return (M-boolean expr state))])))
 
 ;;calls M-value-cps
@@ -124,6 +92,16 @@
   (lambda (expr state) 
     (M-value-cps expr state (lambda (v) v)))) 
     
+;;abstraction for when M-value-cps is given an arithmetic operation
+(define M-value-math-operator 
+  (lambda (expr state operation return)
+    (M-value-cps (exp1 expr) 
+                    state
+                    (lambda (v1) 
+                      (M-value-cps (exp2 expr) 
+                                   state
+                                   (lambda (v2) 
+                                     (return (operation v1 v2))))))))
 
 ;;returns whether an expression is true or false
 (define M-boolean-cps
