@@ -1,10 +1,16 @@
-var x = 4;
-var y = 6 + x;
+var x = 0;
+var y = 0;
 
-function main(v, w) {
-  var a = 5;
-  function hello (b) {
-     a = a + 5;
-  }
-  return x + y + a;
+function setx(a) {
+  x = a;
+}
+
+function sety(b) {
+  y = b;
+}
+
+function main() {
+  setx(5);
+  sety(7);
+  return x * y;
 }

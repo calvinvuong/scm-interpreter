@@ -18,6 +18,9 @@
          ;;(M-state expr state return break continue throw)
          ;;initially break, continue, and throw should give errors
          ;;because we aren't in a structure where we can call them
+         (M-state-global (parser filename)
+                         initialState))))))
+         #|
          (M-state (parser filename)
                   initialState
                   return
@@ -26,7 +29,8 @@
                   (lambda (v) 
                     (error 'error "Improper continue placement"))
                   (lambda (v) 
-                    (error 'invalid_throw "Not in try/catch. Cannot throw exception"))))))))
+                    (error 'invalid_throw "Not in try/catch. Cannot throw exception")))))))) |#
+
 
 ;;turns #f and #t into 'false and 'true for final return
 (define translate-boolean
@@ -218,6 +222,49 @@
       [(null? s1)           'none] ; variable not found
       [(eq? (car s1) var)   (break (car s2))]
       [else                 (find-box-layer-break var (cdr s1) (cdr s2) break)])))
+
+;; "outer layer" of interpreter
+;; goes through global variables and function definitions, adds them to state
+(define M-state-global
+  (lambda (expr state)
+    (cond
+      [(null? expr)                       state]
+      ;; handle global var definitions
+      ;; note: M-state-declare calls M-value, so this handles global var = functioncall
+      [(eq? (get-keyword expr) 'var)      (M-state-global (cdr expr)
+                                                          (M-state-declare (car expr) state))]
+      [(eq? (get-keyword expr) 'function) (M-state-global (cdr expr)
+                                                          (M-state-function (car expr) state))]
+      ;; not allowed on the global level
+      [else                               (error 'error "Cannot do this outside a function.")])))
+
+
+;; adds function definition to closure
+;; TODO: handle nested functions
+;; returns a state
+(define M-state-function
+  (lambda (expr state)
+    (add-to-state (list (func-name expr)
+                        (make-closure (param-list expr)
+                                      (func-body expr)
+                                      get-func-env))
+                  state)))
+
+(define make-closure
+  (lambda (params body env)
+    (list params body env)))
+
+;; STUB
+(define get-func-env
+  (lambda ()
+    '()))
+
+;; abstracted macros
+(define func-name cadr)
+(define param-list caddr)
+(define func-body cadddr)
+      
+                                                                          
 
 ;;calls one of many M-state-** functions depending on nature of input
 (define M-state
