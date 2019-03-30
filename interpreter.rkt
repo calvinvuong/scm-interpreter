@@ -322,6 +322,15 @@
       ; a "goto" construct continue
       [(eq? (get-keyword expr) 'continue)   (continue state)]
       [(eq? (get-keyword expr) 'throw)      (throw (list (get-throw-value expr state) state))]
+
+      ; this handles a nested function
+      [(eq? (get-keyword expr) 'function)   (M-state (cdr expr)
+                                                     (M-state-function (car expr) state)
+                                                     break-return
+                                                     break
+                                                     continue
+                                                     throw)]
+                                                     
       
       [(eq? (get-keyword expr) 'if)         (M-state (cdr expr) 
                                                      (M-state-if (car expr) 
