@@ -18,8 +18,13 @@
          ;;(M-state expr state return break continue throw)
          ;;initially break, continue, and throw should give errors
          ;;because we aren't in a structure where we can call them
-         (M-state-global (parser filename)
-                         initialState))))))
+         ;; assumes main takes no parameters
+         (M-state-functioncall 'main '()
+                               (M-state-global (parser filename) initialState)
+                               return
+                               (lambda (v) (error 'error "Improper break placement."))
+                               (lambda (v) (error 'error "Improper continue placement."))
+                               (lambda (v) (error 'invalid_throw "Not in try/catch. Cannot throw exception"))))))))
          #|
          (M-state (parser filename)
                   initialState
@@ -239,6 +244,12 @@
       [else                               (error 'error "Cannot do this outside a function.")])))
 
 
+;; consider if this is necessary
+(define M-state-functioncall
+  (lambda (name params state  break-return break continue throw)
+    state))
+    ;(M-value name state params break-return break continue throw)))
+
 ;; adds function definition to closure
 ;; TODO: handle nested functions
 ;; returns a state
@@ -254,17 +265,32 @@
   (lambda (params body env)
     (list params body env)))
 
-;; STUB
+;; PROBABLY BUGGY
+;; finds the layer with the function name
+;; returns that layer of the state and all layers below it
 (define get-func-env
-  (lambda ()
-    '()))
+  (lambda (name state)
+    (cond
+      [(null? state)                '()]
+      [(in-list? name (caar state)) state]
+      [else                         (get-func-env name (cdr state))])))
+
+
+;; helper for get-func-env
+(define in-list?
+  (lambda (name lis)
+    (cond
+      [(null? lis)            #f]
+      [(eq? (car lis) name)   #t]
+      [else                   (in-list? name (cdr lis))])))
+      
+    
 
 ;; abstracted macros
 (define func-name cadr)
 (define param-list caddr)
 (define func-body cadddr)
-      
-                                                                          
+                                                      
 
 ;;calls one of many M-state-** functions depending on nature of input
 (define M-state
