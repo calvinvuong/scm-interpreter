@@ -84,7 +84,7 @@
                       (cps-return (* -1 v)))
                     continuations)]
       ;;function
-      ;;[(eq? (get-operator expr) 'funcall) (cps-return (M-value-function expr state cps-return))]
+      [(eq? (get-operator expr) 'funcall) (cps-return (M-value-function expr state continuations))]
       [(eq? (get-operator expr) 'return) (cps-return (M-value (exp1 expr) state continuations))]
       [(eq? (list-length expr) 2)        (error 'undefined "Incorrect number of arguments")]
       [(not (eq? (list-length expr) 3))  (error 'undefined "Incorrect number of arguments")]
@@ -98,10 +98,11 @@
 ;;calls M-value-cps
 (define M-value
   (lambda (expr state continuations)
-    (if (eq? (car expr) 'funcall)
-        (M-value-function expr state continuations)
-        (M-value-cps expr state (lambda (v) v) continuations))))
+    (M-value-cps expr state (lambda (v) v) continuations)))
 
+(define M-value-function2
+  (lambda (expr state continuations)
+    (display expr)))
 
 ;; M-value for evaluating a function call
 (define M-value-function
@@ -109,18 +110,19 @@
     (call/cc
      (lambda (r) ;; new continuation for return
     (remove-layer
-      (M-state (get-body expr)
-               (bind-params (get-formal-params expr)
+      (M-state (get-body (get-name expr) state)
+               (bind-params (get-formal-params (get-name expr) state)
                             (get-actual-params expr)
                             (push-layer
-                             ((get-env-func (get-var-value state (get-name expr))) (get-name expr) state))
+                             ((get-env-func (get-name expr) state) (get-name expr) state))
+                            state
                             continuations)
                (hash-set continuations 'return r)))))))
 
 
 ;; takes two lists
 ;; binds elements in list1 to corresponding values in list2 in the state
-(define bind-params
+(define bind-params_old
   (lambda (l1 l2 state continuations)
     (cond
       [(and (null? l1) (null? l2))     state]
@@ -130,13 +132,42 @@
                                                     (update-binding (car l1)
                                                                     (M-value (car l2) state continuations)
                                                                     state))])))
+;; env "new state" which is what get-func-env returns
+;; state "old state" ny
+(define bind-params
+  (lambda (formal actual env state continuations)
+    (cond
+      [(and (null? formal) (null? actual))       env]
+      ;; formal params and actual params differ in lenght
+      [(or (null? formal) (null? actual))       (error 'error "Function received incorrect number of arguments.")]
+      [else                                     (bind-params (cdr formal) (cdr actual)
+                                                             (add-to-state (list (car formal)
+                                                                                 (M-value (car actual) state continuations))
+                                                                           env)
+                                                             state
+                                                             continuations)])))
+
+
+;; returns a list of the formal params from the function closure
+(define get-formal-params
+  (lambda (name state)
+    (car (get-var-value state name))))
+
+(define get-body
+  (lambda (name state)
+    (cadr (get-var-value state name))))
+
+;; returns the function for get-env in the closure
+(define get-env-func
+  (lambda (name state)
+    (caddr (get-var-value state name))))
 
 ;; abstracted macros
 (define get-name cadr)
 (define get-actual-params cddr)
-(define get-formal-params car)
-(define get-env-func caddr) ; this gets you a function
-(define get-body cadr)
+;;(define get-formal-params car)
+;;(define get-env-func caddr) ; this gets you a function
+
     
     
 ;;abstraction for when M-value-cps is given an arithmetic operation
@@ -721,3 +752,4 @@
 
 ; Provide the interpret function for rackunit
 (provide interpret interpret)
+;(interpret "testcode")

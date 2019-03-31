@@ -1,17 +1,9 @@
-var x = 10;
-var y = 40;
-
-function setx(a) {
-  x = a;
-}
-
-function sety(b) {
-  y = b;
-}
+var x = 3;
+function sum(a, b) {
+   return a + b;
+          }
 
 function main() {
-  sety();
-  var c = setx(5);
-  sety(7, 9, 10);
-  return x * y;
-}
+                 var m = 10;
+                     return sum(x, m);
+ }
