@@ -97,7 +97,7 @@
 
 ;;calls M-value-cps
 (define M-value
-  (lambda (expr state)
+  (lambda (expr state continuations)
     (if (eq? (car expr) 'funcall)
         (M-value-function expr state continuations)
         (M-value-cps expr state (lambda (v) v) continuations))))
@@ -105,22 +105,23 @@
 
 ;; M-value for evaluating a function call
 (define M-value-function
-  (lambda (expr state break-return break continue throw)
+  (lambda (expr state continuations)
     (call/cc
      (lambda (r) ;; new continuation for return
     (remove-layer
       (M-state (get-body expr)
-               (bind-params (get-formal-params)
-                            (get-actual-params)
+               (bind-params (get-formal-params expr)
+                            (get-actual-params expr)
                             (push-layer
-                             ((get-env-func (get-var-value state (get-name expr))) (get-name expr) state)))
+                             ((get-env-func (get-var-value state (get-name expr))) (get-name expr) state))
+                            continuations)
                (hash-set continuations 'return r)))))))
 
 
 ;; takes two lists
 ;; binds elements in list1 to corresponding values in list2 in the state
 (define bind-params
-  (lambda (l1 l2 state)
+  (lambda (l1 l2 state continuations)
     (cond
       [(and (null? l1) (null? l2))     state]
       ;; formal params and actual params differ in length
