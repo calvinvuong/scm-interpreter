@@ -606,4 +606,5 @@
 
 (define (atom? x) (not (or (pair? x) (null? x))))
 
-(interpret "testcode")
+; Provide the interpret function for rackunit
+(provide interpret interpret)
