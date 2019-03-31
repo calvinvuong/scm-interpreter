@@ -437,6 +437,21 @@
                                                      continuations)]
       [else                                 state])))
 
+; gets the whole state except the last layer for checking 
+; whether a varibable was already declared
+; The bottom layer is stuff that was declared outside this function, 
+; so it can be redefined in the function body and hidden 
+(define remove-last-layer
+  (lambda (state)
+    (remove-last-layer-cps state (lambda (v) v))))
+
+(define remove-last-layer-cps
+  (lambda (state return)
+    (if (null? (cdr state)) 
+      (return '())
+      (remove-last-layer-cps (cdr state) 
+                             (lambda (v) (return (cons (car state) v)))))))
+
 
 ;;checks to see if var is arleady declared in this state
 ;;For use in M-state-declare
@@ -448,8 +463,8 @@
 (define M-state-declare
   (lambda (expr state continuations)
     (cond
-      ;[(var-declared (declare-var expr) state)     (display (cadr state))]
-      ;[(var-declared (declare-var expr) state)     (error 'error "Variable already declared!")]
+      [(var-declared (declare-var expr) (remove-last-layer state))
+       (error 'error "Variable already declared!")]
       [(eq? (list-length expr) 3)                  (add-to-state (cons (declare-var expr) 
                                                                        (list (M-value (caddr expr)
                                                                                       state
