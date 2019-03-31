@@ -3,7 +3,7 @@
 ;; Ben Young
 
 #lang racket
-(require "simpleParser.rkt")
+(require "functionParser.rkt")
 
 (define initialState '((() ())))
 (define initialContinuations 
@@ -31,9 +31,10 @@
          ;;(M-state expr state return break continue throw)
          ;;initially break, continue, and throw should give errors
          ;;because we aren't in a structure where we can call them
-         (M-state (parser filename)
-                  initialState
-                  (initialContinuations return)))))))
+         ;; assumes main takes no parameters
+         (M-state-funcall '(funcall main)
+                               (M-state-global (parser filename) initialState (initialContinuations return))
+                               (initialContinuations return)))))))
 
 ;;turns #f and #t into 'false and 'true for final return
 (define translate-boolean
@@ -62,7 +63,6 @@
       [(eq? (find-box var state) 'none)            (error 'undeclared "Variable not declared.")]
       [(eq? (unbox (find-box var state)) 'null)    (error 'uninitialized "Using before assigning.")]
       [else                                        (unbox (find-box var state))])))
-
 
 ;;returns numeric or boolean value of expression
 (define M-value-cps
@@ -97,14 +97,46 @@
 
 ;;calls M-value-cps
 (define M-value
-  (lambda (expr state continuations) 
-    (M-value-cps expr state (lambda (v) v) continuations)))
+  (lambda (expr state)
+    (if (eq? (car expr) 'funcall)
+        (M-value-function expr state continuations)
+        (M-value-cps expr state (lambda (v) v) continuations))))
 
-;;cps-returns the value of a function
-;;pass in a new cps-return
-;;(define M-value-function 
- ;; (lambda (expr enviro cps-return)
 
+;; M-value for evaluating a function call
+(define M-value-function
+  (lambda (expr state break-return break continue throw)
+    (call/cc
+     (lambda (r) ;; new continuation for return
+    (remove-layer
+      (M-state (get-body expr)
+               (bind-params (get-formal-params)
+                            (get-actual-params)
+                            (push-layer
+                             ((get-env-func (get-var-value state (get-name expr))) (get-name expr) state)))
+               (hash-set continuations 'return r)))))))
+
+
+;; takes two lists
+;; binds elements in list1 to corresponding values in list2 in the state
+(define bind-params
+  (lambda (l1 l2 state)
+    (cond
+      [(and (null? l1) (null? l2))     state]
+      ;; formal params and actual params differ in length
+      [(xor (null? l1) (null? l2))     (error 'error "Function received incorrect number of arguments.")]
+      [else                            (bind-params (cdr l1) (cdr l2)
+                                                    (update-binding (car l1)
+                                                                    (M-value (car l2) state continuations)
+                                                                    state))])))
+
+;; abstracted macros
+(define get-name cadr)
+(define get-actual-params cddr)
+(define get-formal-params car)
+(define get-env-func caddr) ; this gets you a function
+(define get-body cadr)
+    
     
 ;;abstraction for when M-value-cps is given an arithmetic operation
 (define M-value-math-operator 
@@ -233,6 +265,72 @@
       [(eq? (car s1) var)   (break (car s2))]
       [else                 (find-box-layer-break var (cdr s1) (cdr s2) break)])))
 
+;; "outer layer" of interpreter
+;; goes through global variables and function definitions, adds them to state
+(define M-state-global
+  (lambda (expr state continuations)
+    (cond
+      [(null? expr)                       state]
+      ;; handle global var definitions
+      ;; note: M-state-declare calls M-value, so this handles global var = functioncall
+      [(eq? (get-keyword expr) 'var)      (M-state-global (cdr expr)
+                                                          (M-state-declare (car expr) state continuations)
+                                                          continuations)]
+      [(eq? (get-keyword expr) 'function) (M-state-global (cdr expr)
+                                                          (M-state-function (car expr) state)
+                                                          continuations)]
+      ;; not allowed on the global level
+      [else                               (error 'error "Cannot do this outside a function.")])))
+
+
+;; consider if this is necessary
+;; returns a STATE whereas M-value-function returns a VALUE
+(define M-state-funcall
+  (lambda (expr state continuations)
+    (M-value expr state continuations)))
+
+;; adds function definition to closure
+;; TODO: handle nested functions
+;; returns a state
+(define M-state-function
+  (lambda (expr state)
+    (add-to-state (list (func-name expr)
+                        (make-closure (param-list expr)
+                                      (func-body expr)
+                                      get-func-env))
+                  state)))
+
+(define make-closure
+  (lambda (params body env)
+    (list params body env)))
+
+;; PROBABLY BUGGY
+;; finds the layer with the function name
+;; returns that layer of the state and all layers below it
+(define get-func-env
+  (lambda (name state)
+    (cond
+      [(null? state)                '()]
+      [(in-list? name (caar state)) state]
+      [else                         (get-func-env name (cdr state))])))
+
+
+;; helper for get-func-env
+(define in-list?
+  (lambda (name lis)
+    (cond
+      [(null? lis)            #f]
+      [(eq? (car lis) name)   #t]
+      [else                   (in-list? name (cdr lis))])))
+      
+    
+
+;; abstracted macros
+(define func-name cadr)
+(define param-list caddr)
+(define func-body cadddr)
+                                                      
+
 ;;calls one of many M-state-** functions depending on nature of input
 (define M-state
   (lambda (expr state continuations)
@@ -267,6 +365,19 @@
                                                (list (get-throw-value 
                                                        expr state continuations) 
                                                      state))]
+      ; this handles a nested function
+      ; TODO We might not want to handle nesteds here
+      ; should scan for nested funcs immediately when we enter the outer function
+      [(eq? (get-keyword expr) 'function)   (M-state (cdr expr)
+                                                     (M-state-function (car expr) state)
+                                                     continuations)]
+
+      ; handles function calls
+      [(eq? (get-keyword expr) 'funcall)   (M-state (cdr expr)
+                                                    (M-state-funcall (car expr) state)
+                                                    continuations)]
+                                                             
+                                                     
       
       [(eq? (get-keyword expr) 'if)         (M-state (cdr expr) 
                                                      (M-state-if (car expr) 

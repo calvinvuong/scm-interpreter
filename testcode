@@ -1,2 +1,17 @@
 var x = 10;
-var result = 1;
+var y = 40;
+
+function setx(a) {
+  x = a;
+}
+
+function sety(b) {
+  y = b;
+}
+
+function main() {
+  sety();
+  var c = setx(5);
+  sety(7, 9, 10);
+  return x * y;
+}
