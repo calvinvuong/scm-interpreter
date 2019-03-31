@@ -32,7 +32,7 @@
          ;;initially break, continue, and throw should give errors
          ;;because we aren't in a structure where we can call them
          ;; assumes main takes no parameters
-         (M-state-funcall '(funcall main)
+         (M-value '(funcall main)
                                (M-state-global (parser filename) initialState (initialContinuations return))
                                (initialContinuations return)))))))
 
@@ -100,9 +100,6 @@
   (lambda (expr state continuations)
     (M-value-cps expr state (lambda (v) v) continuations)))
 
-(define M-value-function2
-  (lambda (expr state continuations)
-    (display expr)))
 
 ;; M-value for evaluating a function call
 (define M-value-function
@@ -134,6 +131,7 @@
                                                                     state))])))
 ;; env "new state" which is what get-func-env returns
 ;; state "old state" ny
+;; returns the env, not the state
 (define bind-params
   (lambda (formal actual env state continuations)
     (cond
@@ -165,10 +163,7 @@
 ;; abstracted macros
 (define get-name cadr)
 (define get-actual-params cddr)
-;;(define get-formal-params car)
-;;(define get-env-func caddr) ; this gets you a function
 
-    
     
 ;;abstraction for when M-value-cps is given an arithmetic operation
 (define M-value-math-operator 
@@ -404,9 +399,9 @@
                                                      (M-state-function (car expr) state)
                                                      continuations)]
 
-      ; handles function calls
+      ; handles function calls that are not assigned to a var value
       [(eq? (get-keyword expr) 'funcall)   (M-state (cdr expr)
-                                                    (M-state-funcall (car expr) state)
+                                                    (M-state-funcall (car expr) state continuations)
                                                     continuations)]
                                                              
                                                      
@@ -453,7 +448,8 @@
 (define M-state-declare
   (lambda (expr state continuations)
     (cond
-      [(var-declared (declare-var expr) state)     (error 'error "Variable already declared!")]
+      ;[(var-declared (declare-var expr) state)     (display (cadr state))]
+      ;[(var-declared (declare-var expr) state)     (error 'error "Variable already declared!")]
       [(eq? (list-length expr) 3)                  (add-to-state (cons (declare-var expr) 
                                                                        (list (M-value (caddr expr)
                                                                                       state
@@ -751,5 +747,5 @@
 (define (atom? x) (not (or (pair? x) (null? x))))
 
 ; Provide the interpret function for rackunit
-(provide interpret interpret)
-;(interpret "testcode")
+;(provide interpret interpret)
+(interpret "testcode")
