@@ -177,7 +177,8 @@
                       (M-boolean-cps (exp2 expr) 
                                    state
                                    (lambda (v2) 
-                                     (cps-return (operation v1 v2)))))
+                                     (cps-return (operation v1 v2)))
+                                   continuations))
                     continuations)))
 
 ;; Add a binding to the state
