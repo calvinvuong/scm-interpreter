@@ -117,18 +117,6 @@
                (hash-set continuations 'return r)))))))
 
 
-;; takes two lists
-;; binds elements in list1 to corresponding values in list2 in the state
-(define bind-params_old
-  (lambda (l1 l2 state continuations)
-    (cond
-      [(and (null? l1) (null? l2))     state]
-      ;; formal params and actual params differ in length
-      [(xor (null? l1) (null? l2))     (error 'error "Function received incorrect number of arguments.")]
-      [else                            (bind-params (cdr l1) (cdr l2)
-                                                    (update-binding (car l1)
-                                                                    (M-value (car l2) state continuations)
-                                                                    state))])))
 ;; env "new state" which is what get-func-env returns
 ;; state "old state" ny
 ;; returns the env, not the state
@@ -314,8 +302,8 @@
 ;; returns a STATE whereas M-value-function returns a VALUE
 (define M-state-funcall
   (lambda (expr state continuations)
-    (M-value expr state continuations)))
-
+    (let ((x (M-value expr state continuations))) state)))
+    
 ;; adds function definition to closure
 ;; TODO: handle nested functions
 ;; returns a state
