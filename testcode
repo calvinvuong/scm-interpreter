@@ -10,7 +10,8 @@ function sety(b) {
 }
 
 function main() {
-  setx(5);
-  sety(7);
+  sety();
+  var c = setx(5);
+  sety(7, 9, 10);
   return x * y;
 }

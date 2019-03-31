@@ -19,7 +19,7 @@
          ;;initially break, continue, and throw should give errors
          ;;because we aren't in a structure where we can call them
          ;; assumes main takes no parameters
-         (M-state-functioncall 'main '()
+         (M-state-funcall '(funcall main)
                                (M-state-global (parser filename) initialState)
                                return
                                (lambda (v) (error 'error "Improper break placement."))
@@ -130,8 +130,49 @@
 
 ;;calls M-value-cps
 (define M-value
-  (lambda (expr state) 
-    (M-value-cps expr state (lambda (v) v)))) 
+  (lambda (expr state)
+    (if (eq? (car expr) 'funcall)
+        (M-value-function expr state break-return break continue throw)
+        (M-value-cps expr state (lambda (v) v)))))
+
+
+;; M-value for evaluating a function call
+(define M-value-function
+  (lambda (expr state break-return break continue throw)
+    (call/cc
+     (lambda (r) ;; new continuation for return
+    (remove-layer
+      (M-state (get-body expr)
+               (bind-params (get-formal-params)
+                            (get-actual-params)
+                            (push-layer
+                             ((get-env-func (get-var-value state (get-name expr))) (get-name expr) state)))
+               r
+               break
+               continue
+               throw)))))) xxx
+
+
+;; takes two lists
+;; binds elements in list1 to corresponding values in list2 in the state
+(define bind-params
+  (lambda (l1 l2 state)
+    (cond
+      [(and (null? l1) (null? l2))     state]
+      ;; formal params and actual params differ in length
+      [(or (null? l1) (null? l2))      (error 'error "Function received incorrect number of arguments.")]
+      [else                            (bind-params (cdr l1) (cdr l2)
+                                                    (update-binding (car l1)
+                                                                    (M-value (car l2) state)
+                                                                    state))])))
+
+;; abstracted macros
+(define get-name cadr)
+(define get-actual-params cddr)
+(define get-formal-params car)
+(define get-env-func caddr) ; this gets you a function
+(define get-body cadr)
+    
     
 
 ;;returns whether an expression is true or false
@@ -245,10 +286,10 @@
 
 
 ;; consider if this is necessary
-(define M-state-functioncall
-  (lambda (name params state  break-return break continue throw)
-    state))
-    ;(M-value name state params break-return break continue throw)))
+;; returns a STATE whereas M-value-function returns a VALUE
+(define M-state-funcall
+  (lambda (expr state break-return break continue throw)
+    (M-value expr break-return break continue throw)))
 
 ;; adds function definition to closure
 ;; TODO: handle nested functions
@@ -330,6 +371,15 @@
                                                      break
                                                      continue
                                                      throw)]
+
+      ; handles function calls
+      [(eq? (get-keyword expr) 'funcall)   (M-state (cdr expr)
+                                                    (M-state-funcall (car expr) state)
+                                                    break-return
+                                                    break
+                                                    continue
+                                                    throw)]
+                                                             
                                                      
       
       [(eq? (get-keyword expr) 'if)         (M-state (cdr expr) 
