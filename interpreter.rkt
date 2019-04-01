@@ -106,6 +106,8 @@
   (lambda (expr state continuations)
     (call/cc
      (lambda (r) ;; new continuation for return
+      ; (call/cc
+      ;  (lambda (t) ;; new continuation for throw
     (remove-layer
       (M-state (get-body (get-name expr) state)
                (bind-params (get-formal-params (get-name expr) state)
@@ -114,11 +116,11 @@
                              ((get-env-func (get-name expr) state) (get-name expr) state))
                             state
                             continuations)
-               (hash-set continuations 'return r)))))))
+               (hash-set* continuations 'return r)))))))
 
 
 ;; env "new state" which is what get-func-env returns
-;; state "old state" ny
+;; state "old state"
 ;; returns the env, not the state
 (define bind-params
   (lambda (formal actual env state continuations)
@@ -244,6 +246,7 @@
   (lambda (var val state)
     (cond
       [(eq? (find-box var state) 'none)            (error 'undeclared "Variable not declared.")]
+      ;[(eq? (find-box var state) 'none)            (display state)]
       ;; FIXME
       ;;[(eq? (unbox (find-box var state)) 'null)    (error 'undeclared "Using before assigning.")]
       [else                                        (begin (set-box! (find-box var state) val)
@@ -436,7 +439,6 @@
 (define M-state-declare
   (lambda (expr state continuations)
     (cond
-      ;[(var-declared (declare-var expr) state)     (display (cadr state))]
       ;[(var-declared (declare-var expr) state)     (error 'error "Variable already declared!")]
       [(eq? (list-length expr) 3)                  (add-to-state (cons (declare-var expr) 
                                                                        (list (M-value (caddr expr)
@@ -614,25 +616,28 @@
       ;;If we threw an exception, state will be input from the call/cc
       ;;in which case its car is the first argument to catch, which isn't a list
       ;;so this case is the same as if we didn't have a catch block
-      [(list? (car state)) (M-state-finally (finally-expression expr)
+       [(list? (car state)) (M-state-finally (finally-expression expr)
                                             state
                                             (hash-set* continuations
                                                        'do-at-end 
                                                        (lambda (v) v)
                                                        'do-at-end-name
-                                                       'null))]
+                                                       'null))] 
+      ;[(list? (car state)) (display state)]
       ;;if we did throw an exception
       [else (M-state-finally (finally-expression expr)
                              (M-state-catch-recurse (catch-expression expr)
                                                     (add-to-state (cons (get-caught-var expr)
                                                                         (list (car state)))
-                                                                  (remove-layer (cadr state)))
+                                                                  (cadr state))
+                                                                  ;(remove-layer (cadr state)))
                                                     continuations)
                              (hash-set* continuations
                                         'do-at-end
                                         (lambda (v) v)
                                         'do-at-end-name
                                         'null))])))
+      ;[else (display state)])))
 
 (define M-state-catch-recurse
   (lambda (expr state continuations)
