@@ -339,7 +339,7 @@
   (lambda (name state)
     (cond
       [(null? state)                '()]
-      [(in-list? name (caar state)) state]
+      [(in-list? name (caar state)) (flatten-state state)]
       [else                         (get-func-env name (cdr state))])))
 
 
@@ -785,4 +785,4 @@
 
 ; Provide the interpret function for rackunit
 ;(provide interpret interpret)
-(interpret "testcode")
+(provide interpret interpret)
