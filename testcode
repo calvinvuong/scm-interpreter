@@ -1,30 +1,50 @@
-function divide(x, y) {
-  if (y == 0)
-    throw 1000000;
-  return x / y;
+var liberal = -10;
+
+function trueconservative(ben, shapiro){
+    var j = 2;
+    liberal = liberal - 1;
+    if(!(ben && shapiro)){
+        break;
+    }
 }
 
- function main() {
-  var x = 0;
-  var j = 1;
-
-  try {
-    while (j >= 0) {
-    var i = 10;
-    while (i >= 0) {
-      try {
-        x = x + divide(10*i, i);
-      }
-      catch(e) {
-        x = x + divide(e, j);
-      }
-      i = i - 1;
+function ben(){
+    var ronald = true;
+    var reagan = false;
+    function divide(x, y) {
+        return x || y;
     }
-    j = j - 1;
-   }
-  }
-  catch (e2) {
-    x = x * 2;
-  }
-  return x;
+
+     function shapiro() {
+      j = j + 1;
+
+      try {
+        var b = true;
+        var z = divide(b, false);
+        j = j + 4;
+        if(z == true){
+            throw 69;
+        }
+      }
+      catch (e2) {
+        j = j + e2;
+      }
+      finally{
+        j = j + 5;
+        liberal = -1*liberal;
+        while(liberal > 0){
+           j = j + 1;
+           trueconservative(ronald, reagan);
+        }
+      }
+    }
+
+    var j = 2;
+    shapiro();
+    return j;
+}
+function main(){
+    ben();
+    var x = ben();
+    return x + liberal;
 }

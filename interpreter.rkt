@@ -318,7 +318,6 @@
   (lambda (params body env)
     (list params body env)))
 
-;; PROBABLY BUGGY
 ;; finds the layer with the function name
 ;; returns that layer of the state and all layers below it
 (define get-func-env
@@ -390,11 +389,9 @@
                                                                state
                                                                continuations))]
       ; a "goto" construct break
-      [(eq? (get-keyword expr) 'break)      ((hash-ref continuations 'break)
-                                               (remove-layer state))]
+      [(eq? (get-keyword expr) 'break)      ((hash-ref continuations 'break))]
       ; a "goto" construct continue
-      [(eq? (get-keyword expr) 'continue)   ((hash-ref continuations 'continue)
-                                               state)]
+      [(eq? (get-keyword expr) 'continue)   ((hash-ref continuations 'continue))]
       [(eq? (get-keyword expr) 'throw)      ((hash-ref continuations 'throw)
                                                (get-throw-value 
                                                 expr state continuations))]
@@ -419,15 +416,14 @@
                                                       continuations)]
    
       [(eq? (get-keyword expr) 'while)      (M-state (cdr expr)
-                                                     (let ((a
-                                                      (call/cc
-                                                       (lambda (br) ; br parameter: break continuation
-                                                         (M-state-while (car expr) 
-                                                                        state
-                                                                        (hash-set 
-                                                                          continuations 
-                                                                          'break 
-                                                                          br)))))) state)
+                                                     (call/cc
+                                                      (lambda (br) ; br parameter: break continuation
+                                                        (M-state-while (car expr) 
+                                                                       state
+                                                                       (hash-set 
+                                                                         continuations 
+                                                                         'break 
+                                                                         (lambda () (br state))))))
                                                       continuations)]
       
       [(eq? (get-keyword expr) 'begin)      (M-state (cdr expr) 
@@ -611,18 +607,15 @@
 
 (define M-state-try
   (lambda (expr state continuations)
-    (let ((throw-val 
-          (call/cc
-            (lambda (new-throw)
-              (M-state-trycatchexpr (cons 'begin expr) 
-                                    state 
-                                    (hash-set continuations
-                                              'throw
-                                              new-throw))))))
-      ;;if throw-val is an atom, we did throw something, so add it to state
-      (if (atom? throw-val)
-        (list throw-val state)
-        state))))
+    (call/cc
+      (lambda (new-throw)
+        (M-state-trycatchexpr (cons 'begin expr) 
+                              state 
+                              (hash-set continuations
+                                        'throw
+                                        (lambda (throw-value) 
+                                          (new-throw (list throw-value
+                                                           state)))))))))
 
 (define get-caught-var 
   (lambda (expr) 
@@ -737,15 +730,14 @@
 ;; state with blocks - first add a new layer, then remove it
 (define M-state-block
   (lambda (expr state continuations)
-         (let ((a
-         (remove-layer
-           (call/cc 
-             (lambda (cont) ; continuation for continue
-               (M-state (block-body expr)
-                        (push-layer state)
-                        (hash-set continuations
-                                  'continue
-                                  cont))))))) state)))
+    (remove-layer
+      (call/cc 
+        (lambda (cont) ; continuation for continue
+          (M-state (block-body expr)
+                   (push-layer state)
+                   (hash-set continuations
+                             'continue
+                             (lambda () (cont (push-layer state))))))))))
   
 ;; Adds a new layer to top of state
 (define push-layer
@@ -777,3 +769,4 @@
 
 ; Provide the interpret function for rackunit
 (provide interpret interpret)
+(interpret "testcode")
