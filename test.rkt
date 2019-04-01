@@ -20,14 +20,14 @@
                     (interpret "tests/test3-5")   1)
     (test-equal?    "Using static scoping instead of dynamic"
                     (interpret "tests/test3-6")   115)
-    (test-true      "Boolean parameters and return values"
-                    (interpret "tests/test3-7"))
+    (test-equal?    "Boolean parameters and return values"
+                    (interpret "tests/test3-7")   'true)
     (test-equal?    "Multiple function calls in an expression"
                     (interpret "tests/test3-8")   20)
     (test-equal?    "Function call in parameter of a function"
                     (interpret "tests/test3-9")   24)
     (test-equal?    "Function call that ignores return value"
-                    (interpret "tests/tests10")   2)
+                    (interpret "tests/test3-10")   2)
     (test-equal?    "Function without a return statement"
                     (interpret "tests/test3-11")  35)
     (test-exn       "Mismatched parameters"
