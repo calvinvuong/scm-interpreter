@@ -114,23 +114,11 @@
                              ((get-env-func (get-name expr) state) (get-name expr) state))
                             state
                             continuations)
-               (hash-set continuations 'return r)))))))
+               (hash-set* continuations 'return r)))))))
 
 
-;; takes two lists
-;; binds elements in list1 to corresponding values in list2 in the state
-(define bind-params_old
-  (lambda (l1 l2 state continuations)
-    (cond
-      [(and (null? l1) (null? l2))     state]
-      ;; formal params and actual params differ in length
-      [(xor (null? l1) (null? l2))     (error 'error "Function received incorrect number of arguments.")]
-      [else                            (bind-params (cdr l1) (cdr l2)
-                                                    (update-binding (car l1)
-                                                                    (M-value (car l2) state continuations)
-                                                                    state))])))
 ;; env "new state" which is what get-func-env returns
-;; state "old state" ny
+;; state "old state"
 ;; returns the env, not the state
 (define bind-params
   (lambda (formal actual env state continuations)
@@ -257,8 +245,6 @@
   (lambda (var val state)
     (cond
       [(eq? (find-box var state) 'none)            (error 'undeclared "Variable not declared.")]
-      ;; FIXME
-      ;;[(eq? (unbox (find-box var state)) 'null)    (error 'undeclared "Using before assigning.")]
       [else                                        (begin (set-box! (find-box var state) val)
                                                           state)])))
 
@@ -315,8 +301,8 @@
 ;; returns a STATE whereas M-value-function returns a VALUE
 (define M-state-funcall
   (lambda (expr state continuations)
-    (M-value expr state continuations)))
-
+    (let ((x (M-value expr state continuations))) state)))
+    
 ;; adds function definition to closure
 ;; TODO: handle nested functions
 ;; returns a state
@@ -379,7 +365,6 @@
 (define param-list caddr)
 (define func-body cadddr)
 
-
 ;;calls one of many M-state-** functions depending on nature of input
 (define M-state
   (lambda (expr state continuations)
@@ -411,9 +396,8 @@
       [(eq? (get-keyword expr) 'continue)   ((hash-ref continuations 'continue)
                                                state)]
       [(eq? (get-keyword expr) 'throw)      ((hash-ref continuations 'throw)
-                                               (list (get-throw-value 
-                                                       expr state continuations) 
-                                                     state))]
+                                               (get-throw-value 
+                                                expr state continuations))]
       ; this handles a nested function
       ; TODO We might not want to handle nesteds here
       ; should scan for nested funcs immediately when we enter the outer function
@@ -434,7 +418,8 @@
                                                                  continuations)
                                                       continuations)]
    
-      [(eq? (get-keyword expr) 'while)      (M-state (cdr expr) 
+      [(eq? (get-keyword expr) 'while)      (M-state (cdr expr)
+                                                     (let ((a
                                                       (call/cc
                                                        (lambda (br) ; br parameter: break continuation
                                                          (M-state-while (car expr) 
@@ -442,7 +427,7 @@
                                                                         (hash-set 
                                                                           continuations 
                                                                           'break 
-                                                                          br))))
+                                                                          br)))))) state)
                                                       continuations)]
       
       [(eq? (get-keyword expr) 'begin)      (M-state (cdr expr) 
@@ -626,13 +611,18 @@
 
 (define M-state-try
   (lambda (expr state continuations)
-    (call/cc
-     (lambda (new-throw)
-       (M-state-trycatchexpr (cons 'begin expr) 
-                             state 
-                             (hash-set continuations
-                                       'throw
-                                       new-throw))))))
+    (let ((throw-val 
+          (call/cc
+            (lambda (new-throw)
+              (M-state-trycatchexpr (cons 'begin expr) 
+                                    state 
+                                    (hash-set continuations
+                                              'throw
+                                              new-throw))))))
+      ;;if throw-val is an atom, we did throw something, so add it to state
+      (if (atom? throw-val)
+        (list throw-val state)
+        state))))
 
 (define get-caught-var 
   (lambda (expr) 
@@ -663,19 +653,20 @@
       ;;If we threw an exception, state will be input from the call/cc
       ;;in which case its car is the first argument to catch, which isn't a list
       ;;so this case is the same as if we didn't have a catch block
-      [(list? (car state)) (M-state-finally (finally-expression expr)
+       [(list? (car state)) (M-state-finally (finally-expression expr)
                                             state
                                             (hash-set* continuations
                                                        'do-at-end 
                                                        (lambda (v) v)
                                                        'do-at-end-name
-                                                       'null))]
+                                                       'null))] 
       ;;if we did throw an exception
       [else (M-state-finally (finally-expression expr)
                              (M-state-catch-recurse (catch-expression expr)
                                                     (add-to-state (cons (get-caught-var expr)
                                                                         (list (car state)))
-                                                                  (remove-layer (cadr state)))
+                                                                  (cadr state))
+                                                                  ;(remove-layer (cadr state)))
                                                     continuations)
                              (hash-set* continuations
                                         'do-at-end
@@ -721,10 +712,10 @@
 ;;Used for what would be the 'block' inside try and catch
 (define M-state-trycatchexpr
   (lambda (expr state continuations)
-         (remove-layer
-               (M-state (block-body expr)
-                        (push-layer state)
-                        continuations))))
+    (remove-layer
+          (M-state (block-body expr)
+                   (push-layer state)
+                   continuations))))
 
 (define try-block cadr)
 (define catch-block caddr)
@@ -746,6 +737,7 @@
 ;; state with blocks - first add a new layer, then remove it
 (define M-state-block
   (lambda (expr state continuations)
+         (let ((a
          (remove-layer
            (call/cc 
              (lambda (cont) ; continuation for continue
@@ -753,7 +745,7 @@
                         (push-layer state)
                         (hash-set continuations
                                   'continue
-                                  cont)))))))
+                                  cont))))))) state)))
   
 ;; Adds a new layer to top of state
 (define push-layer
@@ -784,5 +776,4 @@
 (define (atom? x) (not (or (pair? x) (null? x))))
 
 ; Provide the interpret function for rackunit
-;(provide interpret interpret)
 (provide interpret interpret)
