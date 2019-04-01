@@ -347,7 +347,6 @@
 (define func-name cadr)
 (define param-list caddr)
 (define func-body cadddr)
-                                                      
 
 ;;calls one of many M-state-** functions depending on nature of input
 (define M-state
@@ -380,9 +379,8 @@
       [(eq? (get-keyword expr) 'continue)   ((hash-ref continuations 'continue)
                                                state)]
       [(eq? (get-keyword expr) 'throw)      ((hash-ref continuations 'throw)
-                                               (list (get-throw-value 
-                                                       expr state continuations) 
-                                                     state))]
+                                               (get-throw-value 
+                                                expr state continuations))]
       ; this handles a nested function
       ; TODO We might not want to handle nesteds here
       ; should scan for nested funcs immediately when we enter the outer function
@@ -404,6 +402,7 @@
                                                       continuations)]
    
       [(eq? (get-keyword expr) 'while)      (M-state (cdr expr) 
+                                                     (let ((a
                                                       (call/cc
                                                        (lambda (br) ; br parameter: break continuation
                                                          (M-state-while (car expr) 
@@ -411,7 +410,7 @@
                                                                         (hash-set 
                                                                           continuations 
                                                                           'break 
-                                                                          br))))
+                                                                          br)))))) state)
                                                       continuations)]
       
       [(eq? (get-keyword expr) 'begin)      (M-state (cdr expr) 
@@ -579,13 +578,18 @@
 
 (define M-state-try
   (lambda (expr state continuations)
-    (call/cc
-     (lambda (new-throw)
-       (M-state-trycatchexpr (cons 'begin expr) 
-                             state 
-                             (hash-set continuations
-                                       'throw
-                                       new-throw))))))
+    (let ((throw-val 
+          (call/cc
+            (lambda (new-throw)
+              (M-state-trycatchexpr (cons 'begin expr) 
+                                    state 
+                                    (hash-set continuations
+                                              'throw
+                                              new-throw))))))
+      ;;if throw-val is an atom, we did throw something, so add it to state
+      (if (atom? throw-val)
+        (list throw-val state)
+        state))))
 
 (define get-caught-var 
   (lambda (expr) 
@@ -677,10 +681,10 @@
 ;;Used for what would be the 'block' inside try and catch
 (define M-state-trycatchexpr
   (lambda (expr state continuations)
-         (remove-layer
-               (M-state (block-body expr)
-                        (push-layer state)
-                        continuations))))
+    (remove-layer
+          (M-state (block-body expr)
+                   (push-layer state)
+                   continuations))))
 
 (define try-block cadr)
 (define catch-block caddr)
@@ -702,6 +706,7 @@
 ;; state with blocks - first add a new layer, then remove it
 (define M-state-block
   (lambda (expr state continuations)
+         (let ((a
          (remove-layer
            (call/cc 
              (lambda (cont) ; continuation for continue
@@ -709,7 +714,7 @@
                         (push-layer state)
                         (hash-set continuations
                                   'continue
-                                  cont)))))))
+                                  cont))))))) state)))
   
 ;; Adds a new layer to top of state
 (define push-layer
