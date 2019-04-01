@@ -182,38 +182,39 @@
 (define M-boolean-cps
   (lambda (expr state cps-return continuations)
     (cond
-      [(null? expr)                     (error 'undefined "Incorrect number of arguments")]
-      [(eq? expr 'true)                 (cps-return #t)]
-      [(eq? expr 'false)                (cps-return #f)]
+      [(null? expr)                       (error 'undefined "Incorrect number of arguments")]
+      [(eq? expr 'true)                   (cps-return #t)]
+      [(eq? expr 'false)                  (cps-return #f)]
       ;;otherwise, this is a variable
-      [(not (list? expr))               (cps-return (get-var-value state expr))] 
-      [(eq? (get-operator expr) '==)    (M-boolean-comparator expr state cps-return eq? continuations)]
-      [(eq? (get-operator expr) '!=)    (M-boolean-comparator expr 
-                                                              state 
-                                                              cps-return
-                                                              (lambda (a b)
-                                                                (not (eq? a b)))
-                                                              continuations)]
-      [(eq? (get-operator expr) '<)    (M-boolean-comparator expr state cps-return < continuations)]
-      [(eq? (get-operator expr) '>)    (M-boolean-comparator expr state cps-return > continuations)]
-      [(eq? (get-operator expr) '<=)   (M-boolean-comparator expr state cps-return <= continuations)]
-      [(eq? (get-operator expr) '>=)   (M-boolean-comparator expr state cps-return >= continuations)]
-      [(eq? (get-operator expr) '&&)   (M-boolean-logic-operator 
-                                         expr state 
-                                         (lambda (a b) 
-                                           (and a b))
-                                         cps-return continuations)] 
-      [(eq? (get-operator expr) '||)   (M-boolean-logic-operator 
-                                         expr state 
-                                         (lambda (a b) 
-                                           (or a b))
-                                         cps-return continuations)] 
-      [(eq? (get-operator expr) '!) 
-       (M-boolean-cps (exp1 expr) 
-                      state
-                      (lambda (v) 
-                        (cps-return (not v)))
-                      continuations)]
+      [(not (list? expr))                 (cps-return (get-var-value state expr))] 
+      ;;or a function
+      [(eq? (get-operator expr) 'funcall) (cps-return (M-value-function expr state continuations))]
+      [(eq? (get-operator expr) '==)      (M-boolean-comparator expr state cps-return eq? continuations)]
+      [(eq? (get-operator expr) '!=)      (M-boolean-comparator expr 
+                                                                state 
+                                                                cps-return
+                                                                (lambda (a b)
+                                                                  (not (eq? a b)))
+                                                                continuations)]
+      [(eq? (get-operator expr) '<)       (M-boolean-comparator expr state cps-return < continuations)]
+      [(eq? (get-operator expr) '>)       (M-boolean-comparator expr state cps-return > continuations)]
+      [(eq? (get-operator expr) '<=)      (M-boolean-comparator expr state cps-return <= continuations)]
+      [(eq? (get-operator expr) '>=)      (M-boolean-comparator expr state cps-return >= continuations)]
+      [(eq? (get-operator expr) '&&)      (M-boolean-logic-operator 
+                                            expr state 
+                                            (lambda (a b) 
+                                              (and a b))
+                                            cps-return continuations)] 
+      [(eq? (get-operator expr) '||)      (M-boolean-logic-operator 
+                                            expr state 
+                                            (lambda (a b) 
+                                              (or a b))
+                                            cps-return continuations)] 
+      [(eq? (get-operator expr) '!)       (M-boolean-cps (exp1 expr) 
+                                                         state
+                                                         (lambda (v) 
+                                                           (cps-return (not v)))
+                                                         continuations)]
       [else (error 'invalid_expression "Invalid value or boolean expression!")])))
       
 ;;calls M-boolean-cps
@@ -458,6 +459,21 @@
                                                      continuations)]
       [else                                 state])))
 
+; gets the whole state except the last layer for checking 
+; whether a varibable was already declared
+; The bottom layer is stuff that was declared outside this function, 
+; so it can be redefined in the function body and hidden 
+(define remove-last-layer
+  (lambda (state)
+    (remove-last-layer-cps state (lambda (v) v))))
+
+(define remove-last-layer-cps
+  (lambda (state return)
+    (if (null? (cdr state)) 
+      (return '())
+      (remove-last-layer-cps (cdr state) 
+                             (lambda (v) (return (cons (car state) v)))))))
+
 
 ;;checks to see if var is arleady declared in this state
 ;;For use in M-state-declare
@@ -469,8 +485,8 @@
 (define M-state-declare
   (lambda (expr state continuations)
     (cond
-      ;[(var-declared (declare-var expr) state)     (display (cadr state))]
-      ;[(var-declared (declare-var expr) state)     (error 'error "Variable already declared!")]
+      [(var-declared (declare-var expr) (remove-last-layer state))
+       (error 'error "Variable already declared!")]
       [(eq? (list-length expr) 3)                  (add-to-state (cons (declare-var expr) 
                                                                        (list (M-value (caddr expr)
                                                                                       state
