@@ -339,7 +339,7 @@
   (lambda (name state)
     (cond
       [(null? state)                '()]
-      [(in-list? name (caar state)) state]
+      [(in-list? name (caar state)) (flatten-state state)]
       [else                         (get-func-env name (cdr state))])))
 
 
@@ -351,13 +351,34 @@
       [(eq? (car lis) name)   #t]
       [else                   (in-list? name (cdr lis))])))
       
-    
+;; Flatten existing layers into one layer
+; Most recent layer should be first in flattened layer
+(define flatten-state
+  (lambda (state)
+    (flatten-state-acc state (car initialState))))
+(define flatten-state-acc
+  (lambda (state acc)
+    (cond
+      [(null? state)            (cons acc state)]
+      [else                     (flatten-state-acc (cdr state)
+                                                   (merge-layers acc (car state) (car initialState)))])))
+
+;; Merge two layers into one -- helper function for flatten-layer
+(define merge-layers
+  (lambda (layer1 layer2 acc)
+    (cond
+      [(null? (car layer1)) (list (append (car acc) (car layer2))
+                                  (append (cadr acc) (cadr layer2)))]
+      [else                 (merge-layers (list (cdar layer1) (cdadr layer1))
+                                          layer2
+                                          (list (append (car acc) (list (caar layer1)))
+                                                (append (cadr acc) (list (caadr layer1)))))])))
 
 ;; abstracted macros
 (define func-name cadr)
 (define param-list caddr)
 (define func-body cadddr)
-                                                      
+
 
 ;;calls one of many M-state-** functions depending on nature of input
 (define M-state
@@ -764,4 +785,4 @@
 
 ; Provide the interpret function for rackunit
 ;(provide interpret interpret)
-(interpret "testcode")
+(provide interpret interpret)
