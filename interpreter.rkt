@@ -3,7 +3,7 @@
 ;; Ben Young
 
 #lang racket
-(require "functionParser.rkt")
+(require "classParser.rkt")
 
 (define initialState '((() ())))
 (define initialContinuations 
@@ -33,8 +33,8 @@
          ;;because we aren't in a structure where we can call them
          ;; assumes main takes no parameters
          (M-value '(funcall main)
-                               (M-state-global (parser filename) initialState (initialContinuations return))
-                               (initialContinuations return)))))))
+                   (M-state-global (parser filename) initialState (initialContinuations return))
+                   (initialContinuations return)))))))
 
 ;;turns #f and #t into 'false and 'true for final return
 (define translate-boolean
@@ -296,8 +296,46 @@
       ;; not allowed on the global level
       [else                               (error 'error "Cannot do this outside a function.")])))
 
+;; get the variable name out of expr for a variable declaration
+(define get-var-name cadar)
+;; get the function's parameters from its definition
+(define get-params caddar)
+(define get-method-body (compose car cdddar))
 
-;; consider if this is necessary
+(define make-class-closure-body 
+  (lambda (cls-body closure)
+    (cond
+      [(and (eq? (get-keyword expr) 'var) (eq? (list-length expr) 2)) 
+       (make-class-closure-body (cdr cls-body) (hash-set closure
+                                                         'inst-vars
+                                                         (append (hash-ref closure
+                                                                           'inst-vars)
+                                                                 (list (get-var-name expr)))))]
+      [(and (eq? (get-keyword expr) 'var) (eq? (list-length expr) 3)) 
+       (make-class-closure-body (cdr cls-body) (hash-set closure
+                                                         'inst-vars
+                                                         (append (hash-ref closure
+                                                                           'inst-vars)
+                                                                 (list (get-var-name expr)))
+                                                         'const
+                                                         (append (hash-ref closure
+                                                                           'const)
+                                                                 ;;replace 'var' with '=' so constructor can read this
+                                                                 ;;like it's parsed code
+                                                                 (list (cons '= (cdar expr))))))]
+      [(eq? (get-keyword expr) 'function) 
+       (make-class-closure-body 
+         (cdr cls-body (hash-set closure
+                                 'methods
+                                 add-to-method-closure (get-var-name expr)
+                                                       (make-method-closure (get-params expr)
+                                                                            (get-method-body expr)
+                                                                            get-func-env 
+                                                                            get-class)
+                                                       (hash-ref closure 'methods))))]
+      [(null? expr) closure]
+      [else (error 'error "Improper statement in class definition")])))
+
 ;; returns a STATE whereas M-value-function returns a VALUE
 (define M-state-funcall
   (lambda (expr state continuations)
@@ -770,3 +808,4 @@
 ; Provide the interpret function for rackunit
 (provide interpret interpret)
 (interpret "testcode")
+
