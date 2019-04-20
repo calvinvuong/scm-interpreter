@@ -3,7 +3,8 @@
 ;; Ben Young
 
 #lang racket
-(require "functionParser.rkt")
+;(require "functionParser.rkt")
+(require "classParser.rkt")
 
 (define initialState '((() ())))
 (define initialContinuations 
@@ -317,6 +318,23 @@
 (define make-closure
   (lambda (params body env)
     (list params body env)))
+
+;; add the func-name and its closure to an existing list of func names and their closures
+;; return the new list of the method names and their associated closures
+(define add-to-method-closure
+  (lambda (func-name func-closure method-closures)
+    (list
+     (cons func-name (car method-closures))
+     (cons func-closure (cadr method-closures)))))
+
+(define make-constructor-closure
+  (lambda (constructor-body)
+    (make-method-closure '() constructor-body get-func-env get-class)))
+
+
+(define make-method-closure
+  (lambda (params body env class)
+    (list params body env class)))
 
 ;; finds the layer with the function name
 ;; returns that layer of the state and all layers below it
