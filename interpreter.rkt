@@ -6,7 +6,9 @@
 
 (require "classParser.rkt")
 
-(define initialState '((() ())))
+(define initial-state '((() ())))
+(define initial-methods '( () () ))
+
 (define initialContinuations 
   (lambda (return)
     (make-immutable-hash
@@ -34,7 +36,7 @@
          ;;because we aren't in a structure where we can call them
          ;; assumes main takes no parameters
          (M-value '(funcall main)
-                   (M-state-global (parser filename) initialState (initialContinuations return))
+                   (M-state-global (parser filename) initial-state)
                    (initialContinuations return)))))))
 
 ;;turns #f and #t into 'false and 'true for final return
@@ -282,7 +284,7 @@
 
 ;; "outer layer" of interpreter
 ;; goes through global variables and function definitions, adds them to state
-(define M-state-global
+#|(define M-state-global
   (lambda (expr state continuations)
     (cond
       [(null? expr)                       state]
@@ -296,6 +298,7 @@
                                                           continuations)]
       ;; not allowed on the global level
       [else                               (error 'error "Cannot do this outside a function.")])))
+|#
 
 ;; get the variable name out of expr for a variable declaration
 (define get-var-name cadar)
@@ -303,39 +306,83 @@
 (define get-params caddar)
 (define get-method-body (compose car cdddar))
 
+;; returns the list of superclass(es)
+(define get-super
+  (lambda (cls-expr)
+    (if (null? (caddr cls-expr))
+        '()
+        (cdr (caddr cls-expr)))))
+
+;; gets the body of a class from the entire class definition
+(define cls-bod cadddr)
+;; gets the name of a class from the entire class definition
+(define cls-name cadr)
+
+(define M-state-global
+  (lambda (expr state)
+    (cond
+      [(null? expr)                      state]
+      [(eq? (get-keyword expr) 'class)   (M-state-global (cdr expr)
+                                                         (M-state-class (car expr) state))]
+      [else                              (error 'error "Illegal statement outside of a class definition.")])))
+
+;; returns the state after a class closure has been added to it
+(define M-state-class
+  (lambda (cls-expr state)
+    (add-to-state (list (cls-name cls-expr) (make-class-closure cls-expr)) state)))
+
+;; returns the closure for the class represented as a hashmap
+(define make-class-closure
+  (lambda (cls-expr)
+    (make-class-closure-body (cls-bod cls-expr) (make-immutable-hash
+                                       (list (cons 'super (get-super cls-expr))
+                                             (cons 'methods initial-methods)
+                                             (cons 'const '())
+                                             (cons 'inst-vars '())
+                                             (cons 'static-vars '())
+                                             (cons 'static-vals '()))))))
+                                        
+         
+;; might be broken
+;; cls-body?
 (define make-class-closure-body 
   (lambda (cls-body closure)
     (cond
-      [(and (eq? (get-keyword expr) 'var) (eq? (list-length expr) 2)) 
+      [(null? cls-body) closure]
+      [(and (eq? (get-keyword cls-body) 'var) (eq? (list-length (car cls-body)) 2)) 
        (make-class-closure-body (cdr cls-body) (hash-set closure
                                                          'inst-vars
                                                          (append (hash-ref closure
                                                                            'inst-vars)
-                                                                 (list (get-var-name expr)))))]
-      [(and (eq? (get-keyword expr) 'var) (eq? (list-length expr) 3)) 
-       (make-class-closure-body (cdr cls-body) (hash-set closure
+                                                                 (list (get-var-name cls-body)))))]
+      [(and (eq? (get-keyword cls-body) 'var) (eq? (list-length (car cls-body)) 3)) 
+       (make-class-closure-body (cdr cls-body) (hash-set* closure
                                                          'inst-vars
                                                          (append (hash-ref closure
                                                                            'inst-vars)
-                                                                 (list (get-var-name expr)))
+                                                                 (list (get-var-name cls-body)))
                                                          'const
                                                          (append (hash-ref closure
                                                                            'const)
                                                                  ;;replace 'var' with '=' so constructor can read this
                                                                  ;;like it's parsed code
-                                                                 (list (cons '= (cdar expr))))))]
-      [(eq? (get-keyword expr) 'function) 
+                                                                 (list (cons '= (cdar cls-body))))))]
+      [(or (eq? (get-keyword cls-body) 'function) (eq? (get-keyword cls-body) 'static-function))
        (make-class-closure-body 
-         (cdr cls-body (hash-set closure
+         (cdr cls-body) (hash-set closure
                                  'methods
-                                 add-to-method-closure (get-var-name expr)
-                                                       (make-method-closure (get-params expr)
-                                                                            (get-method-body expr)
+                                 (add-to-method-closure (get-var-name cls-body)
+                                                       (make-method-closure (get-params cls-body)
+                                                                            (get-method-body cls-body)
                                                                             get-func-env 
                                                                             get-class)
                                                        (hash-ref closure 'methods))))]
-      [(null? expr) closure]
+    
       [else (error 'error "Improper statement in class definition")])))
+
+(define get-class
+  (lambda ()
+    '()))
 
 ;; returns a STATE whereas M-value-function returns a VALUE
 (define M-state-funcall
@@ -396,13 +443,13 @@
 ; Most recent layer should be first in flattened layer
 (define flatten-state
   (lambda (state)
-    (flatten-state-acc state (car initialState))))
+    (flatten-state-acc state (car initial-state))))
 (define flatten-state-acc
   (lambda (state acc)
     (cond
       [(null? state)            (cons acc state)]
       [else                     (flatten-state-acc (cdr state)
-                                                   (merge-layers acc (car state) (car initialState)))])))
+                                                   (merge-layers acc (car state) (car initial-state)))])))
 
 ;; Merge two layers into one -- helper function for flatten-layer
 (define merge-layers
@@ -825,5 +872,6 @@
 
 ; Provide the interpret function for rackunit
 (provide interpret interpret)
-(interpret "testcode")
+;(interpret "test")
+(M-state-global (parser "test") initial-state)
 
