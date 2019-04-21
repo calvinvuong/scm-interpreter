@@ -96,13 +96,13 @@
       [(eq? (get-operator expr) '*) (M-value-math-operator expr state * cps-return continuations)]
       [(eq? (get-operator expr) '/) (M-value-math-operator expr state quotient cps-return continuations)]
       [(eq? (get-operator expr) '%) (M-value-math-operator expr state remainder cps-return continuations)]
+      [(eq? (get-operator expr) 'new) (cps-return (instance-closure (exp1 expr) state))]
       [else (cps-return (M-boolean expr state continuations))])))
 
 ;;calls M-value-cps
 (define M-value
   (lambda (expr state continuations)
     (M-value-cps expr state (lambda (v) v) continuations)))
-
 
 ;; M-value for evaluating a function call
 (define M-value-function
@@ -119,6 +119,10 @@
                             continuations)
                (hash-set* continuations 'return r)))))))
 
+;; M-value for creating a new object - returns an object closure
+(define instance-closure
+  (lambda (class state)
+    (hash-ref (get-var-value state class) 'methods)
 
 ;; env "new state" which is what get-func-env returns
 ;; state "old state"
@@ -348,7 +352,7 @@
 (define make-class-closure-body 
   (lambda (cls-body closure)
     (cond
-      [(null? cls-body) closure]
+      [(null? cls-body) (make-constructor closure)]
       [(and (eq? (get-keyword cls-body) 'var) (eq? (list-length (car cls-body)) 2)) 
        (make-class-closure-body (cdr cls-body) (hash-set closure
                                                          'inst-vars
@@ -364,9 +368,7 @@
                                                          'const
                                                          (append (hash-ref closure
                                                                            'const)
-                                                                 ;;replace 'var' with '=' so constructor can read this
-                                                                 ;;like it's parsed code
-                                                                 (list (cons '= (cdar cls-body))))))]
+                                                                 (list (cddar cls-body)))))]
       [(or (eq? (get-keyword cls-body) 'function) (eq? (get-keyword cls-body) 'static-function))
        (make-class-closure-body 
          (cdr cls-body) (hash-set closure
@@ -379,6 +381,15 @@
                                                        (hash-ref closure 'methods))))]
     
       [else (error 'error "Improper statement in class definition")])))
+
+;; turns the list of field values currently in 'const into a function that just makes a list of the class
+;; and the list of field values
+(define make-constructor
+  (lambda (closure)
+    (hash-set closure
+              'const
+              (lambda (class)
+                (list class (hash-ref closure 'const))))))
 
 (define get-class
   (lambda ()
@@ -411,11 +422,6 @@
     (list
      (cons func-name (car method-closures))
      (cons func-closure (cadr method-closures)))))
-
-(define make-constructor-closure
-  (lambda (constructor-body)
-    (make-method-closure '() constructor-body get-func-env get-class)))
-
 
 (define make-method-closure
   (lambda (params body env class)
@@ -873,5 +879,6 @@
 ; Provide the interpret function for rackunit
 (provide interpret interpret)
 ;(interpret "test")
-(M-state-global (parser "test") initial-state)
+;;(M-state-global (parser "test") initial-state)
+(parser "testcode")
 
