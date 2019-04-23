@@ -5,6 +5,7 @@
 #lang racket
 
 (require "classParser.rkt")
+;(require "functionParser.rkt")
 
 (define initial-state '((() ())))
 (define initial-methods '( () () ))
@@ -27,7 +28,7 @@
 ;; r is the continuation for return
 ; lambda (v) v is just the "default" continuation for break and continue
 (define interpret
-  (lambda (filename)
+  (lambda (filename class)
     (translate-boolean
       (call/cc
        (lambda (return) ; continuation for return
@@ -35,9 +36,16 @@
          ;;initially break, continue, and throw should give errors
          ;;because we aren't in a structure where we can call them
          ;; assumes main takes no parameters
-         (M-value '(funcall main)
+         ;(cons 'funcall (list (cons 'dot (cons class '(main))))))))))
+         (M-value  (cons 'funcall (list (cons 'dot (cons class '(main)))))
                    (M-state-global (parser filename) initial-state)
                    (initialContinuations return)))))))
+
+
+
+(define get-main-class-closure
+  (lambda (class state)
+    (get-var-value state class))) ; returns the hashset closure of the class
 
 ;;turns #f and #t into 'false and 'true for final return
 (define translate-boolean
@@ -59,6 +67,10 @@
   (lambda (lis)
     (list-length-cps lis (lambda (v) v))))
 
+(define get-class-method-closure
+  (lambda (class var state)
+    (get-var-value (hash-ref (get-var-value class state) 'methods) var)))
+              
 ;; returns the value of variable in current state
 (define get-var-value
   (lambda (state var)
@@ -87,6 +99,9 @@
                       (cps-return (* -1 v)))
                     continuations)]
       ;;function
+      [(and (eq? (get-operator expr) 'funcall)
+            (eq? (list-length expr) 3))
+       (cps-return (M-value-function expr state continuations))]
       [(eq? (get-operator expr) 'funcall) (cps-return (M-value-function expr state continuations))]
       [(eq? (get-operator expr) 'return) (cps-return (M-value (exp1 expr) state continuations))]
       [(eq? (list-length expr) 2)        (error 'undefined "Incorrect number of arguments")]
@@ -110,11 +125,11 @@
     (call/cc
      (lambda (r) ;; new continuation for return
     (remove-layer
-      (M-state (get-body (get-name expr) state)
-               (bind-params (get-formal-params (get-name expr) state)
+      (M-state (get-body-class (get-name expr) (get-class expr) state)
+               (bind-params (get-formal-params-class (get-name expr) (get-class expr) state)
                             (get-actual-params expr)
                             (push-layer
-                             ((get-env-func (get-name expr) state) (get-name expr) state))
+                             ((get-env-func-class (get-name expr) (get-class expr) state) (get-name expr) state))
                             state
                             continuations)
                (hash-set* continuations 'return r)))))))
@@ -138,21 +153,56 @@
 
 
 ;; returns a list of the formal params from the function closure
-(define get-formal-params
+(define get-formal-params-class
+  (lambda (name class state)
+    (get-formal-params-class-helper name (hash-ref (get-var-value state class) 'methods))))
+
+(define get-formal-params-class-helper
   (lambda (name state)
-    (car (get-var-value state name))))
+    (cond
+      [(null? (car state))         (error 'error "Nothing found.")]
+      [(eq? (caar state) name)     (caaadr state)]
+      [else                        (get-formal-params-class-helper name (list (cdar state) (cdadr state)))])))
 
 (define get-body
   (lambda (name state)
     (cadr (get-var-value state name))))
+
+;; gets the body of the function name that resides within class
+(define get-body-class
+  (lambda (name class state)
+    (get-body-class-helper name (hash-ref (get-var-value state class) 'methods))))
+
+(define get-body-class-helper
+  (lambda (name state)
+    (cond
+      [(null? (car state))       (error 'error "Nothing found.")]
+      [(eq? (caar state) name)   (car (cdaadr state))]
+      [else                      (get-body-class-helper name (list (cdar state) (cdadr state)))])))
+    
 
 ;; returns the function for get-env in the closure
 (define get-env-func
   (lambda (name state)
     (caddr (get-var-value state name))))
 
+;; returns the get-env in the closure, but for methods in classes
+(define get-env-func-class
+  (lambda (name class state)
+    (get-env-func-class-helper name (hash-ref (get-var-value state class) 'methods))))
+
+(define get-env-func-class-helper
+  (lambda (name state)
+    (cond
+      [(null? (car state))          (error 'error "Nothing found.")]
+      [(eq? (caar state) name)      (cadr (cdaadr state))]
+      [else                         (get-env-func-class-helper name (list (cdar state) (cdadr state)))])))
+       
+         
+
 ;; abstracted macros
-(define get-name cadr)
+(define get-name (lambda (expr) (car (cddadr expr))))
+(define get-class cadadr)
 (define get-actual-params cddr)
 
     
@@ -380,9 +430,7 @@
     
       [else (error 'error "Improper statement in class definition")])))
 
-(define get-class
-  (lambda ()
-    '()))
+
 
 ;; returns a STATE whereas M-value-function returns a VALUE
 (define M-state-funcall
@@ -872,6 +920,6 @@
 
 ; Provide the interpret function for rackunit
 (provide interpret interpret)
-;(interpret "test")
-(M-state-global (parser "test") initial-state)
-
+(interpret "test" 'A)
+;(get-var-value (M-state-global (parser "test") initial-state) 'A)
+;(get-body-class 'main 'A (M-state-global (parser "test") initial-state))
