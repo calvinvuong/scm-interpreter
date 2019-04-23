@@ -109,15 +109,17 @@
   (lambda (expr state continuations)
     (call/cc
      (lambda (r) ;; new continuation for return
-    (remove-layer
-      (M-state (get-body (get-name expr) state)
-               (bind-params (get-formal-params (get-name expr) state)
-                            (get-actual-params expr)
-                            (push-layer
-                             ((get-env-func (get-name expr) state) (get-name expr) state))
-                            state
-                            continuations)
-               (hash-set* continuations 'return r)))))))
+       (lambda (method-closure)
+         (remove-layer
+           (M-state (hash-ref method-closure 'body) ;;get function body
+                    (bind-params (hash-ref method-closure 'params)
+                                 (get-actual-params expr)
+                                 (push-layer
+                                  ((hash-ref method-closure 'env) (get-name expr) state))
+                                 state
+                                 continuations)
+                    (hash-set* continuations 'return r))))
+         (get-var-value state (get-name expr))))))
 
 ;; M-value for creating a new object - returns an object closure
 ;; just call the class's constructor
@@ -143,20 +145,6 @@
                                                              state
                                                              continuations)])))
 
-
-;; returns a list of the formal params from the function closure
-(define get-formal-params
-  (lambda (name state)
-    (car (get-var-value state name))))
-
-(define get-body
-  (lambda (name state)
-    (cadr (get-var-value state name))))
-
-;; returns the function for get-env in the closure
-(define get-env-func
-  (lambda (name state)
-    (caddr (get-var-value state name))))
 
 ;; abstracted macros
 (define get-name cadr)
@@ -382,7 +370,7 @@
        (make-class-closure-body 
          (cdr cls-body) (hash-set closure
                                  'methods
-                                 (add-to-method-closure (get-var-name cls-body)
+                                 (add-method-to-class (get-var-name cls-body)
                                                        (make-method-closure (get-params cls-body)
                                                                             (get-method-body cls-body)
                                                                             get-func-env 
@@ -418,21 +406,21 @@
                                       get-func-env))
                   state)))
 
-(define make-closure
-  (lambda (params body env)
-    (list params body env)))
+(define make-method-closure
+  (lambda (params body env class-name)
+    (make-immutable-hash
+      (list (cons 'params params)
+            (cons 'body body)
+            (cons 'env env)
+            (cons 'class-name class-name)))))
 
 ;; add the func-name and its closure to an existing list of func names and their closures
 ;; return the new list of the method names and their associated closures
-(define add-to-method-closure
-  (lambda (func-name func-closure method-closures)
+(define add-method-to-class
+  (lambda (method-name method-closure method-closures)
     (list
-     (cons func-name (car method-closures))
-     (cons func-closure (cadr method-closures)))))
-
-(define make-method-closure
-  (lambda (params body env class)
-    (list params body env class)))
+     (cons method-name (car method-closures))
+     (cons method-closure (cadr method-closures)))))
 
 ;; finds the layer with the function name
 ;; returns that layer of the state and all layers below it
