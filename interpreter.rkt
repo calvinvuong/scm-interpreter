@@ -120,9 +120,12 @@
                (hash-set* continuations 'return r)))))))
 
 ;; M-value for creating a new object - returns an object closure
+;; just call the class's constructor
 (define instance-closure
   (lambda (class state)
-    (hash-ref (get-var-value state class) 'methods)
+    (make-immutable-hash
+      (list (cons 'class class)
+            (cons 'inst-vals ((hash-ref (get-var-value state class) 'const)))))))
 
 ;; env "new state" which is what get-func-env returns
 ;; state "old state"
@@ -321,6 +324,8 @@
 (define cls-bod cadddr)
 ;; gets the name of a class from the entire class definition
 (define cls-name cadr)
+;;get value of initialized variable in class definition
+(define get-var-init-value cddar)
 
 (define M-state-global
   (lambda (expr state)
@@ -358,7 +363,11 @@
                                                          'inst-vars
                                                          (append (hash-ref closure
                                                                            'inst-vars)
-                                                                 (list (get-var-name cls-body)))))]
+                                                                 (list (get-var-name cls-body)))
+                                                         'const
+                                                         (append (hash-ref closure
+                                                                           'const)
+                                                                 (list 'null))))]
       [(and (eq? (get-keyword cls-body) 'var) (eq? (list-length (car cls-body)) 3)) 
        (make-class-closure-body (cdr cls-body) (hash-set* closure
                                                          'inst-vars
@@ -368,7 +377,7 @@
                                                          'const
                                                          (append (hash-ref closure
                                                                            'const)
-                                                                 (list (cddar cls-body)))))]
+                                                                 (list (get-var-init-value cls-body)))))]
       [(or (eq? (get-keyword cls-body) 'function) (eq? (get-keyword cls-body) 'static-function))
        (make-class-closure-body 
          (cdr cls-body) (hash-set closure
@@ -382,14 +391,12 @@
     
       [else (error 'error "Improper statement in class definition")])))
 
-;; turns the list of field values currently in 'const into a function that just makes a list of the class
-;; and the list of field values
+;; turns the list of field values currently in 'const into a function that just makes 
+;; the list of instance variable values
 (define make-constructor
   (lambda (closure)
-    (hash-set closure
-              'const
-              (lambda (class)
-                (list class (hash-ref closure 'const))))))
+    (lambda ()
+      (map (lambda (v) (box v)) (hash-ref closure 'const)))))
 
 (define get-class
   (lambda ()
