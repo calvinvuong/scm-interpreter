@@ -407,7 +407,7 @@
 ;; returns the closure for the class represented as a hashmap
 (define make-class-closure
   (lambda (cls-expr)
-    (make-class-closure-body (cls-bod cls-expr) (make-immutable-hash
+    (make-class-closure-body (cls-bod cls-expr) (cls-name cls-expr) (make-immutable-hash
                                        (list (cons 'super (get-super cls-expr))
                                              (cons 'methods '())
                                              (cons 'const '())
@@ -419,7 +419,7 @@
 ;; might be broken
 ;; cls-body?
 (define make-class-closure-body 
-  (lambda (cls-body closure)
+  (lambda (cls-body class-name closure)
     (cond
       [(null? cls-body) (make-constructor closure)]
       [(and (eq? (get-keyword cls-body) 'var) (eq? (list-length (car cls-body)) 2)) 
@@ -447,7 +447,7 @@
                                                                     (get-params cls-body)
                                                                     (get-method-body cls-body)
                                                                     get-func-env 
-                                                                    get-class)))))]
+                                                                    class-name)))))]
       [else (error 'error "Improper statement in class definition")])))
 
 
