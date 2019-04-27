@@ -120,6 +120,7 @@
     (M-value-cps expr state (lambda (v) v) continuations)))
 
 ;; M-value for evaluating a function call
+;; This expects a dot expression in the expr
 (define M-value-function
   (lambda (expr state continuations)
     (call/cc
@@ -199,7 +200,7 @@
 ;; returns the get-env in the closure, but for methods in classes
 (define get-env-func-class
   (lambda (name class state)
-    (get-env-func-class-helper name (hash-ref (get-var-value state class) 'methods))))
+     (get-env-func-class-helper name (hash-ref (get-var-value state class) 'methods))))
 
 (define get-env-func-class-helper
   (lambda (name state)
@@ -449,12 +450,10 @@
 ;; the list of instance variable values
 (define make-constructor
   (lambda (closure)
-    (lambda ()
-      (map (lambda (v) (box v)) (hash-ref closure 'const)))))
-
-(define get-class
-  (lambda ()
-    '()))
+    (hash-set closure
+              'const
+              (lambda ()
+                (map (lambda (v) (box v)) (hash-ref closure 'const))))))
 
 ;; returns a STATE whereas M-value-function returns a VALUE
 (define M-state-funcall
@@ -467,7 +466,7 @@
 (define M-state-function
   (lambda (expr state)
     (add-to-state (list (func-name expr)
-                        (make-closure (param-list expr)
+                        (make-method-closure (param-list expr)
                                       (func-body expr)
                                       get-func-env))
                   state)))
@@ -625,6 +624,14 @@
       (remove-last-layer-cps (cdr state) 
                              (lambda (v) (return (cons (car state) v)))))))
 
+;; returns the last layer of the state
+(define get-last-layer
+  (lambda (state)
+    (if (null? (cdr state))
+        state
+        (get-last-layer (cdr state)))))
+               
+
 
 ;;checks to see if var is arleady declared in this state
 ;;For use in M-state-declare
@@ -636,8 +643,8 @@
 (define M-state-declare
   (lambda (expr state continuations)
     (cond
-      [(var-declared (declare-var expr) (remove-last-layer state))
-       (error 'error "Variable already declared!")]
+      ;[(var-declared (declare-var expr) (remove-last-layer state))
+      ; (error 'error "Variable already declared!")]
       [(eq? (list-length expr) 3)                  (add-to-state (cons (declare-var expr) 
                                                                        (list (M-value (caddr expr)
                                                                                       state
@@ -940,5 +947,6 @@
 ; Provide the interpret function for rackunit
 (provide interpret interpret)
 (interpret "test" 'A)
-;(get-var-value (M-state-global (parser "test") initial-state) 'A)
+;(M-state-global (parser "test") initial-state)
+;(hash-ref (get-var-value (M-state-global (parser "test") initial-state) 'A) 'methods)
 ;(get-body-class 'main 'A (M-state-global (parser "test") initial-state))
