@@ -1,9 +1,12 @@
 class A {
+
+      var a = 8;
       
   static function main() {
-  var x = 6;
   var y = 10;
-  return B.multiply(x, y);
+  var x = 6;
+  var z = new B();
+  return z.multiply(30, 20);
   }
 
 }

@@ -99,9 +99,10 @@
                     continuations)]
       ;;function
       [(and (eq? (get-operator expr) 'funcall)
-            (eq? (list-length expr) 3))
+            (>= (list-length expr) 3))
        (cps-return (M-value-function expr state continuations))]
       [(eq? (get-operator expr) 'funcall) (cps-return (M-value-function expr state continuations))]
+      [(eq? (get-operator expr) 'new) (cps-return (instance-closure (exp1 expr) state))]
       [(eq? (get-operator expr) 'return) (cps-return (M-value (exp1 expr) state continuations))]
       [(eq? (list-length expr) 2)        (error 'undefined "Incorrect number of arguments")]
       [(not (eq? (list-length expr) 3))  (error 'undefined "Incorrect number of arguments")]
@@ -110,7 +111,6 @@
       [(eq? (get-operator expr) '*) (M-value-math-operator expr state * cps-return continuations)]
       [(eq? (get-operator expr) '/) (M-value-math-operator expr state quotient cps-return continuations)]
       [(eq? (get-operator expr) '%) (M-value-math-operator expr state remainder cps-return continuations)]
-      [(eq? (get-operator expr) 'new) (cps-return (instance-closure (exp1 expr) state))]
       [else (cps-return (M-boolean expr state continuations))])))
 
 ;;calls M-value-cps
@@ -127,12 +127,13 @@
        ((lambda (method-closure)
          (remove-layer
            (M-state (hash-ref method-closure 'body) ;;get function body
-                    (bind-params (hash-ref method-closure 'params)
+                    (append (bind-params (hash-ref method-closure 'params)
                                  (get-actual-params expr)
                                  (push-layer
                                   ((hash-ref method-closure 'env) (get-method-call-name expr) state))
                                  state
                                  continuations)
+			    state)
                     (hash-set* continuations 'return r))))
          (get-method-closure (get-method-call-name expr) (get-class expr) state))))))
 ;; TODO Write helper to get class closure
@@ -470,9 +471,11 @@
 (define M-state-function
   (lambda (expr state)
     (add-to-state (list (func-name expr)
-                        (make-method-closure (param-list expr)
-                                      (func-body expr)
-                                      get-func-env))
+                        (make-method-closure '()
+                                             (param-list expr)
+                                             (func-body expr)
+                                             get-func-env
+                                             '()))
                   state)))
 
 (define make-method-closure
