@@ -111,6 +111,7 @@
       [(eq? (get-operator expr) '*) (M-value-math-operator expr state * cps-return continuations)]
       [(eq? (get-operator expr) '/) (M-value-math-operator expr state quotient cps-return continuations)]
       [(eq? (get-operator expr) '%) (M-value-math-operator expr state remainder cps-return continuations)]
+      [(eq? (get-operator expr) 'new) (cps-return (instance-closure (exp1 expr) state))]
       [else (cps-return (M-boolean expr state continuations))])))
 
 ;;calls M-value-cps
@@ -118,22 +119,31 @@
   (lambda (expr state continuations)
     (M-value-cps expr state (lambda (v) v) continuations)))
 
-
 ;; M-value for evaluating a function call
 (define M-value-function
   (lambda (expr state continuations)
     (call/cc
      (lambda (r) ;; new continuation for return
-    (remove-layer
-      (M-state (get-body-class (get-name expr) (get-class expr) state)
-               (bind-params (get-formal-params-class (get-name expr) (get-class expr) state)
-                            (get-actual-params expr)
-                            (push-layer
-                             ((get-env-func-class (get-name expr) (get-class expr) state) (get-name expr) state))
-                            state
-                            continuations)
-               (hash-set* continuations 'return r)))))))
+       (lambda (method-closure)
+         (remove-layer
+           (M-state (hash-ref method-closure 'body) ;;get function body
+                    (bind-params (hash-ref method-closure 'params)
+                                 (get-actual-params expr)
+                                 (push-layer
+                                  ((hash-ref method-closure 'env) (get-name expr) state))
+                                 state
+                                 continuations)
+                    (hash-set* continuations 'return r))))
+         (get-var-value state (get-name expr))))))
+;; TODO Write helper to get class closure
 
+;; M-value for creating a new object - returns an object closure
+;; just call the class's constructor
+(define instance-closure
+  (lambda (class state)
+    (make-immutable-hash
+      (list (cons 'class class)
+            (cons 'inst-vals ((hash-ref (get-var-value state class) 'const)))))))
 
 ;; env "new state" which is what get-func-env returns
 ;; state "old state"
@@ -367,6 +377,8 @@
 (define cls-bod cadddr)
 ;; gets the name of a class from the entire class definition
 (define cls-name cadr)
+;;get value of initialized variable in class definition
+(define get-var-init-value cddar)
 
 (define M-state-global
   (lambda (expr state)
@@ -398,13 +410,17 @@
 (define make-class-closure-body 
   (lambda (cls-body closure)
     (cond
-      [(null? cls-body) closure]
+      [(null? cls-body) (make-constructor closure)]
       [(and (eq? (get-keyword cls-body) 'var) (eq? (list-length (car cls-body)) 2)) 
        (make-class-closure-body (cdr cls-body) (hash-set closure
                                                          'inst-vars
                                                          (append (hash-ref closure
                                                                            'inst-vars)
-                                                                 (list (get-var-name cls-body)))))]
+                                                                 (list (get-var-name cls-body)))
+                                                         'const
+                                                         (append (hash-ref closure
+                                                                           'const)
+                                                                 (list 'null))))]
       [(and (eq? (get-keyword cls-body) 'var) (eq? (list-length (car cls-body)) 3)) 
        (make-class-closure-body (cdr cls-body) (hash-set* closure
                                                          'inst-vars
@@ -414,14 +430,12 @@
                                                          'const
                                                          (append (hash-ref closure
                                                                            'const)
-                                                                 ;;replace 'var' with '=' so constructor can read this
-                                                                 ;;like it's parsed code
-                                                                 (list (cons '= (cdar cls-body))))))]
+                                                                 (list (get-var-init-value cls-body)))))]
       [(or (eq? (get-keyword cls-body) 'function) (eq? (get-keyword cls-body) 'static-function))
        (make-class-closure-body 
          (cdr cls-body) (hash-set closure
                                  'methods
-                                 (add-to-method-closure (get-var-name cls-body)
+                                 (add-method-to-class (get-var-name cls-body)
                                                        (make-method-closure (get-params cls-body)
                                                                             (get-method-body cls-body)
                                                                             get-func-env 
@@ -431,6 +445,16 @@
       [else (error 'error "Improper statement in class definition")])))
 
 
+;; turns the list of field values currently in 'const into a function that just makes 
+;; the list of instance variable values
+(define make-constructor
+  (lambda (closure)
+    (lambda ()
+      (map (lambda (v) (box v)) (hash-ref closure 'const)))))
+
+(define get-class
+  (lambda ()
+    '()))
 
 ;; returns a STATE whereas M-value-function returns a VALUE
 (define M-state-funcall
@@ -448,26 +472,21 @@
                                       get-func-env))
                   state)))
 
-(define make-closure
-  (lambda (params body env)
-    (list params body env)))
+(define make-method-closure
+  (lambda (params body env class-name)
+    (make-immutable-hash
+      (list (cons 'params params)
+            (cons 'body body)
+            (cons 'env env)
+            (cons 'class-name class-name)))))
 
 ;; add the func-name and its closure to an existing list of func names and their closures
 ;; return the new list of the method names and their associated closures
-(define add-to-method-closure
-  (lambda (func-name func-closure method-closures)
+(define add-method-to-class
+  (lambda (method-name method-closure method-closures)
     (list
-     (cons func-name (car method-closures))
-     (cons func-closure (cadr method-closures)))))
-
-(define make-constructor-closure
-  (lambda (constructor-body)
-    (make-method-closure '() constructor-body get-func-env get-class)))
-
-
-(define make-method-closure
-  (lambda (params body env class)
-    (list params body env class)))
+     (cons method-name (car method-closures))
+     (cons method-closure (cadr method-closures)))))
 
 ;; finds the layer with the function name
 ;; returns that layer of the state and all layers below it
