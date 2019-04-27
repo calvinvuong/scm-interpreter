@@ -125,7 +125,7 @@
   (lambda (expr state continuations)
     (call/cc
      (lambda (r) ;; new continuation for return
-       (lambda (method-closure)
+       ((lambda (method-closure)
          (remove-layer
            (M-state (hash-ref method-closure 'body) ;;get function body
                     (bind-params (hash-ref method-closure 'params)
@@ -134,8 +134,8 @@
                                   ((hash-ref method-closure 'env) (get-name expr) state))
                                  state
                                  continuations)
-                    (hash-set* continuations 'return r))))
-         (get-method-closure (get-name expr) (get-class expr) state)))))
+                    (hash-set* continuations 'return r)))) 
+         (get-method-closure (car (cddadr expr)) (get-class expr) state))))))
 ;; TODO Write helper to get class closure
 
 ;; M-value for creating a new object - returns an object closure
@@ -166,8 +166,8 @@
 ;; find the method in class's method list whose name matches method-name
 (define get-method-closure
   (lambda (method-name class state)
-      (filter (lambda (h) (eq? (hash-ref h 'name) method-name))
-              (hash-ref (get-var-value state class) 'methods))))
+      (car (filter (lambda (h) (eq? (hash-ref h 'name) method-name))
+              (hash-ref (get-var-value state class) 'methods)))))
 
 ;;;;;;; TODO: do we need these? $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 ;; returns a list of the formal params from the function closure
@@ -220,7 +220,7 @@
          
 
 ;; abstracted macros
-(define get-name (lambda (expr) (car (cddadr expr))))
+(define get-name (lambda (expr) (cadar expr)))
 (define get-class cadadr)
 (define get-actual-params cddr)
 
@@ -408,7 +408,7 @@
   (lambda (cls-expr)
     (make-class-closure-body (cls-bod cls-expr) (make-immutable-hash
                                        (list (cons 'super (get-super cls-expr))
-                                             (cons 'methods initial-methods)
+                                             (cons 'methods '())
                                              (cons 'const '())
                                              (cons 'inst-vars '())
                                              (cons 'static-vars '())

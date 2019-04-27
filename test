@@ -6,9 +6,6 @@ class A {
   return B.multiply(x, y);
   }
 
-  function add(x, y) {
-    return x + y;
-  }
 }
 
 class B {
