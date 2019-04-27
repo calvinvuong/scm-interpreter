@@ -191,7 +191,7 @@
     (get-body-class-helper name (hash-ref (get-var-value state class) 'methods))))
 
 (define get-body-class-helper
-  (method-lista (name state)
+  (lambda (name state)
     (cond
       [(null? (car state))       (error 'error "Nothing found.")]
       [(eq? (caar state) name)   (car (cdaadr state))]
@@ -453,12 +453,10 @@
 ;; the list of instance variable values
 (define make-constructor
   (lambda (closure)
-    (lambda ()
-      (map (lambda (v) (box v)) (hash-ref closure 'const)))))
-
-(define get-class
-  (lambda ()
-    '()))
+    (hash-set closure
+              'const
+              (lambda ()
+                (map (lambda (v) (box v)) (hash-ref closure 'const))))))
 
 ;; returns a STATE whereas M-value-function returns a VALUE
 (define M-state-funcall
@@ -936,6 +934,7 @@
 
 ; Provide the interpret function for rackunit
 (provide interpret interpret)
-(interpret "test" 'A)
+(M-state-global (parser "testcode") initial-state)
+;(interpret "testcode" 'A)
 ;(get-var-value (M-state-global (parser "test") initial-state) 'A)
 ;(get-body-class 'main 'A (M-state-global (parser "test") initial-state))
