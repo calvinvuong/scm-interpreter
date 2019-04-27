@@ -8,7 +8,6 @@
 ;(require "functionParser.rkt")
 
 (define initial-state '((() ())))
-(define initial-methods '( () () ))
 
 (define initialContinuations 
   (lambda (return)
@@ -131,11 +130,11 @@
                     (bind-params (hash-ref method-closure 'params)
                                  (get-actual-params expr)
                                  (push-layer
-                                  ((hash-ref method-closure 'env) (get-name expr) state))
+                                  ((hash-ref method-closure 'env) (get-method-call-name expr) state))
                                  state
                                  continuations)
-                    (hash-set* continuations 'return r)))) 
-         (get-method-closure (car (cddadr expr)) (get-class expr) state))))))
+                    (hash-set* continuations 'return r))))
+         (get-method-closure (get-method-call-name expr) (get-class expr) state))))))
 ;; TODO Write helper to get class closure
 
 ;; M-value for creating a new object - returns an object closure
@@ -220,7 +219,8 @@
          
 
 ;; abstracted macros
-(define get-name (lambda (expr) (cadar expr)))
+(define get-method-def-name cadar)
+(define get-method-call-name (compose car cddadr))
 (define get-class cadadr)
 (define get-actual-params cddr)
 
@@ -442,7 +442,7 @@
          (cdr cls-body) (hash-set closure
                                  'methods
                                  (append (hash-ref closure 'methods)
-                                         (list (make-method-closure (get-name cls-body)
+                                         (list (make-method-closure (get-method-def-name cls-body)
                                                                     (get-params cls-body)
                                                                     (get-method-body cls-body)
                                                                     get-func-env 
@@ -490,6 +490,7 @@
   (lambda (name state)
     (cond
       [(null? state)                '()]
+      ;; TODO function is not at top of state anymore, need to search class
       [(in-list? name (caar state)) (flatten-state state)]
       [else                         (get-func-env name (cdr state))])))
 
