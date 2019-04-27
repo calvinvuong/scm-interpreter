@@ -135,7 +135,7 @@
                                  state
                                  continuations)
                     (hash-set* continuations 'return r))))
-         (get-var-value state (get-name expr))))))
+         (get-method-closure (get-name expr) (get-class expr) state)))))
 ;; TODO Write helper to get class closure
 
 ;; M-value for creating a new object - returns an object closure
@@ -162,7 +162,14 @@
                                                              state
                                                              continuations)])))
 
+;; gets the closure of method from class
+;; find the method in class's method list whose name matches method-name
+(define get-method-closure
+  (lambda (method-name class state)
+      (filter (lambda (h) (eq? (hash-ref h 'name) method-name))
+              (hash-ref (get-var-value state class) 'methods))))
 
+;;;;;;; TODO: do we need these? $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 ;; returns a list of the formal params from the function closure
 (define get-formal-params-class
   (lambda (name class state)
@@ -190,6 +197,7 @@
       [(null? (car state))       (error 'error "Nothing found.")]
       [(eq? (caar state) name)   (car (cdaadr state))]
       [else                      (get-body-class-helper name (list (cdar state) (cdadr state)))])))
+;;;;;;; TODO: do we need these?$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
     
 
 ;; returns the function for get-env in the closure
@@ -363,8 +371,9 @@
 
 ;; get the variable name out of expr for a variable declaration
 (define get-var-name cadar)
-;; get the function's parameters from its definition
+;; get the method's parameters from its definition
 (define get-params caddar)
+;; get the method's body from its definition
 (define get-method-body (compose car cdddar))
 
 ;; returns the list of superclass(es)
@@ -415,34 +424,29 @@
       [(and (eq? (get-keyword cls-body) 'var) (eq? (list-length (car cls-body)) 2)) 
        (make-class-closure-body (cdr cls-body) (hash-set closure
                                                          'inst-vars
-                                                         (append (hash-ref closure
-                                                                           'inst-vars)
+                                                         (append (hash-ref closure 'inst-vars)
                                                                  (list (get-var-name cls-body)))
                                                          'const
-                                                         (append (hash-ref closure
-                                                                           'const)
+                                                         (append (hash-ref closure 'const)
                                                                  (list 'null))))]
       [(and (eq? (get-keyword cls-body) 'var) (eq? (list-length (car cls-body)) 3)) 
        (make-class-closure-body (cdr cls-body) (hash-set* closure
                                                          'inst-vars
-                                                         (append (hash-ref closure
-                                                                           'inst-vars)
+                                                         (append (hash-ref closure 'inst-vars)
                                                                  (list (get-var-name cls-body)))
                                                          'const
-                                                         (append (hash-ref closure
-                                                                           'const)
+                                                         (append (hash-ref closure 'const)
                                                                  (list (get-var-init-value cls-body)))))]
       [(or (eq? (get-keyword cls-body) 'function) (eq? (get-keyword cls-body) 'static-function))
        (make-class-closure-body 
          (cdr cls-body) (hash-set closure
                                  'methods
-                                 (add-method-to-class (get-var-name cls-body)
-                                                       (make-method-closure (get-params cls-body)
-                                                                            (get-method-body cls-body)
-                                                                            get-func-env 
-                                                                            get-class)
-                                                       (hash-ref closure 'methods))))]
-    
+                                 (append (hash-ref closure 'methods)
+                                         (list (make-method-closure (get-name cls-body)
+                                                                    (get-params cls-body)
+                                                                    (get-method-body cls-body)
+                                                                    get-func-env 
+                                                                    get-class)))))]
       [else (error 'error "Improper statement in class definition")])))
 
 
@@ -472,20 +476,13 @@
                   state)))
 
 (define make-method-closure
-  (lambda (params body env class-name)
+  (lambda (name params body env class-name)
     (make-immutable-hash
-      (list (cons 'params params)
+      (list (cons 'name name)
+            (cons 'params params)
             (cons 'body body)
             (cons 'env env)
             (cons 'class-name class-name)))))
-
-;; add the func-name and its closure to an existing list of func names and their closures
-;; return the new list of the method names and their associated closures
-(define add-method-to-class
-  (lambda (method-name method-closure method-closures)
-    (list
-     (cons method-name (car method-closures))
-     (cons method-closure (cadr method-closures)))))
 
 ;; finds the layer with the function name
 ;; returns that layer of the state and all layers below it
