@@ -551,7 +551,12 @@
     (hash-set closure
               'const
               (lambda (state continuations)
-                (map (lambda (v) (box (M-value v state continuations))) (hash-ref closure 'const))))))
+                (map (lambda (v) 
+                       (box 
+                         (if (eq? v 'null)
+                           'null 
+                           (M-value v state continuations))))
+                     (hash-ref closure 'const))))))
 
 ;; returns a STATE whereas M-value-function returns a VALUE
 (define M-state-funcall
@@ -761,13 +766,12 @@
       [else (error 'error "Invalid assign.")])))
 
 ;; update the value of an instance variable
+;; expr is (= (dot x b) val) - x is object, b is field
 (define assign-instance-var
   (lambda (expr state continuations)
     ((lambda (value-box)
-      (cond
-        [(eq? (unbox value-box) 'none)            (error 'undeclared "Instance variable does not exist!")]
-        [else                                        (begin (set-box! value-box (M-value (exp2 expr) state continuations))
-                                                          state)]))
+        (begin (set-box! value-box (M-value (exp2 expr) state continuations))
+                                                          state))
      (get-instance-value-box (exp2 (exp1 expr))
                              (M-value (exp1 (exp1 expr))
                                       state
