@@ -106,6 +106,7 @@
       [(eq? (get-operator expr) 'return) (cps-return (M-value (exp1 expr) state continuations))]
       [(eq? (list-length expr) 2)        (error 'undefined "Incorrect number of arguments")]
       [(not (eq? (list-length expr) 3))  (error 'undefined "Incorrect number of arguments")]
+      [(eq? (get-operator expr) 'dot) (M-value-dot expr state cps-return continuations)]
       [(eq? (get-operator expr) '+) (M-value-math-operator expr state + cps-return continuations)]
       [(eq? (get-operator expr) '-) (M-value-math-operator expr state - cps-return continuations)]
       [(eq? (get-operator expr) '*) (M-value-math-operator expr state * cps-return continuations)]
@@ -256,6 +257,40 @@
                                 continuations))
                  continuations)))
 
+;;when M-value-cps is given a dot
+(define M-value-dot
+  (lambda (expr state cps-return continuations)
+    ((lambda (value)
+       (if (eq? value 'null)
+         (error 'error "instance variable not initialized!")
+         value))
+     (M-value-cps (exp1 expr)
+                  state
+                  (lambda (v)
+                    (cps-return (get-instance-value (exp2 expr) 
+                                                    v
+                                                    state)))
+                  continuations))))
+
+;;get the value of intance variable var from an object closure
+(define get-instance-value
+  (lambda (var object-closure state)
+    (unbox (list-ref (hash-ref object-closure 'inst-vals)
+                     (get-var-index var 
+                                    (hash-ref (get-var-value state 
+                                                             (hash-ref object-closure 'class))
+                                              'inst-vars))))))
+
+;;get index of var in a class' list of instance variable names
+(define get-var-index
+  (lambda (var var-list)
+    ((lambda (index)
+     (if (false? index)
+      (error 'error "Object cannot access this variable!")
+      index))
+     (index-of var-list var))))
+
+
 ;;returns whether an expression is true or false
 (define M-boolean-cps
   (lambda (expr state cps-return continuations)
@@ -388,7 +423,7 @@
 ;; gets the name of a class from the entire class definition
 (define cls-name cadr)
 ;;get value of initialized variable in class definition
-(define get-var-init-value cddar)
+(define get-var-init-value caddar)
 
 (define M-state-global
   (lambda (expr state)
@@ -422,7 +457,7 @@
     (cond
       [(null? cls-body) (make-constructor closure)]
       [(and (eq? (get-keyword cls-body) 'var) (eq? (list-length (car cls-body)) 2))
-       (make-class-closure-body (cdr cls-body) class-name (hash-set closure
+       (make-class-closure-body (cdr cls-body) class-name (hash-set* closure
                                                             'inst-vars
                                                             (append (hash-ref closure 'inst-vars)
                                                                     (list (get-var-name cls-body)))
@@ -956,6 +991,7 @@
 
 ; Provide the interpret function for rackunit
 (provide interpret interpret)
+;(parser "test")
 (interpret "test" 'A)
 ;(M-state-global (parser "test") initial-state)
 ;(hash-ref (get-var-value (M-state-global (parser "test") initial-state) 'A) 'methods)
