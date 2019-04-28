@@ -97,11 +97,13 @@
                     (lambda (v)
                       (cps-return (* -1 v)))
                     continuations)]
-      ;;function
+      ;;funcall with dot operator
       [(and (eq? (get-operator expr) 'funcall)
-            (>= (list-length expr) 3))
-       (cps-return (M-value-function expr state continuations))]
-      [(eq? (get-operator expr) 'funcall) (cps-return (M-value-function expr state continuations))]
+            (list? (exp1 expr)))
+        (cps-return (M-value-function expr state continuations))]
+      ;; funcall without dot operator
+      ;[(eq? (get-operator expr) 'funcall) (cps-return (M-value-function expr state continuations))]
+      [(eq? (get-operator expr) 'funcall) (cps-return (M-value-function-no-dot expr state continuations))]
       [(eq? (get-operator expr) 'new) (cps-return (instance-closure (exp1 expr) state))]
       [(eq? (get-operator expr) 'return) (cps-return (M-value (exp1 expr) state continuations))]
       [(eq? (list-length expr) 2)        (error 'undefined "Incorrect number of arguments")]
@@ -119,7 +121,45 @@
   (lambda (expr state continuations)
     (M-value-cps expr state (lambda (v) v) continuations)))
 
-;; M-value for evaluating a function call
+;; Handles if the funcall had no dot operator
+(define M-value-function-no-dot
+  (lambda (expr state continuations)
+    (if (eq? (find-box (get-func-name expr) state) 'none) ; If true, method is not local.
+        (M-value-function (add-dot-this expr) state continuations)
+        (M-value-function-nested expr state (get-var-value state (get-func-name expr)) continuations)
+        ;state
+        ;(get-var-value state (get-func-name expr)) ; stub for calling function locally
+        )))
+
+;; takes a funcall expr like (funcall multiply 3 2)
+;; returns a funcall expr like (funcall (dot this multiply) 3 2)
+(define add-dot-this
+  (lambda (expr)
+    (append
+     (cons 'funcall (list (list 'dot 'this (get-func-name expr))))
+     (get-func-params expr))))
+
+;; Handles funcall of a nested function
+(define M-value-function-nested
+  (lambda (expr state closure continuations)
+    (call/cc
+     (lambda (r) ;; new continuation for return
+    (remove-layer
+      (M-state (hash-ref closure 'body)
+               (bind-params (hash-ref closure 'params)
+                            (get-actual-params expr)
+                            (push-layer
+                             ((hash-ref closure 'env) (hash-ref closure 'name) state))
+                            '() ; doesn't matter what the instance closure will be
+                            state
+                            continuations)
+               (hash-set* continuations 'return r)))))))
+
+;; macros for parsing funcall w/o dot operator
+(define get-func-name cadr)
+(define get-func-params cddr)
+    
+;; M-value for evaluating a function call with the dot operator
 ;; This expects a dot expression in the expr
 (define M-value-function
   (lambda (expr state continuations)
@@ -152,20 +192,19 @@
 
 ;; env "new state" which is what get-func-env returns
 ;; state "old state"
+;; takes the instance env
 ;; returns the env, not the state
 (define bind-params
   (lambda (formal actual env closure state continuations)
     (cond
       [(and (null? formal) (null? actual))      env]
-     [(eq? (car formal) 'this)                 (bind-params (cdr formal) actual
+      [(eq? (car formal) 'this)                 (bind-params (cdr formal) actual
                                                              (add-to-state (list (car formal)
                                                                                  closure)
                                                                            env)
                                                              closure
                                                              state
                                                             continuations)]
-
-      ;[(eq? (car formal) 'this)        (add-to-state (list (car formal) closure) env)]
 
       ;; formal params and actual params differ in length
       [(or (null? formal) (null? actual))       (error 'error "Function received incorrect number of arguments.")]
@@ -520,7 +559,6 @@
     (let ((x (M-value expr state continuations))) state)))
 
 ;; adds function definition to closure
-;; TODO: handle nested functions
 ;; returns a state
 (define M-state-function
   (lambda (expr state)
