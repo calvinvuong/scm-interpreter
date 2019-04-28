@@ -267,19 +267,19 @@
      (M-value-cps (exp1 expr)
                   state
                   (lambda (v)
-                    (cps-return (get-instance-value (exp2 expr) 
-                                                    v
-                                                    state)))
+                    (cps-return (unbox (get-instance-value-box (exp2 expr) 
+                                                               v
+                                                               state))))
                   continuations))))
 
 ;;get the value of intance variable var from an object closure
-(define get-instance-value
+(define get-instance-value-box
   (lambda (var object-closure state)
-    (unbox (list-ref (hash-ref object-closure 'inst-vals)
-                     (get-var-index var 
-                                    (hash-ref (get-var-value state 
-                                                             (hash-ref object-closure 'class))
-                                              'inst-vars))))))
+    (list-ref (hash-ref object-closure 'inst-vals)
+              (get-var-index var 
+                             (hash-ref (get-var-value state 
+                                                      (hash-ref object-closure 'class))
+                                       'inst-vars)))))
 
 ;;get index of var in a class' list of instance variable names
 (define get-var-index
@@ -702,13 +702,29 @@
 ;; updates the state in variable assignment
 (define M-state-assign
   (lambda (expr state continuations)
-    (if (eq? (list-length expr) 3)
-        (update-binding (exp1 expr)
-                        (M-value (exp2 expr)
-                                 state
-                                 continuations)
-                        state)
-        (error 'error "Invalid assign."))))
+    (cond
+      ;;can't just update binding in the state if we're setting the value of a dot
+      [(eq? (car (exp1 expr)) 'dot) (assign-instance-var expr state continuations)] 
+      [(eq? (list-length expr) 3) (update-binding (exp1 expr)
+                                                  (M-value (exp2 expr)
+                                                           state
+                                                           continuations)
+                                                  state)]
+      [else (error 'error "Invalid assign.")])))
+
+;; update the value of an instance variable
+(define assign-instance-var
+  (lambda (expr state continuations)
+    ((lambda (value-box)
+      (cond
+        [(eq? (unbox value-box) 'none)            (error 'undeclared "Instance variable does not exist!")]
+        [else                                        (begin (set-box! value-box (exp2 expr))
+                                                          state)]))
+     (get-instance-value-box (exp2 (exp1 expr))
+                             (M-value (exp1 (exp1 expr))
+                                      state
+                                      continuations)
+                             state))))
 
 ;; return does not update state, so just pass control to M-value
 ;; checks if valid length
