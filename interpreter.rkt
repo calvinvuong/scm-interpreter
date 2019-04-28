@@ -177,8 +177,8 @@
                                  continuations)
                             state)
                     (hash-set* continuations 'return r))))
-         (get-method-closure (get-method-call-name expr) (get-class-name expr state) state)
-         (get-instance-closure (get-dot-lhs expr) state)  ;STUB for the instance closure
+         (get-method-closure (get-method-call-name expr) (get-class-name expr state continuations) state continuations)
+         (get-instance-closure (get-dot-lhs expr) state continuations)  ;STUB for the instance closure
          )))))
 ;; TODO Write helper to get class closure
 
@@ -216,17 +216,29 @@
                                                              state
                                                              continuations)])))
 
-;; gets the closure of method from class
-;; find the method in class's method list whose name matches method-name
+;; takes a class name and a method name
+;; the "class name" can actually be an expression that has to be evaluated instead of just a variable
+;; returns the method's closure
 (define get-method-closure
-  (lambda (method-name class state)
-      (car (filter (lambda (h) (eq? (hash-ref h 'name) method-name))
-              (hash-ref (get-var-value state class) 'methods)))))
+  (lambda (method-name class state continuations)
+        (get-method-closure-helper method-name
+                                   class
+                                   state)))
 
+; takes an explicit class name and a method name
+; returns the method's closure
+(define get-method-closure-helper
+  (lambda (method-name class state)
+    (car (filter (lambda (h) (eq? (hash-ref h 'name) method-name))
+                 (hash-ref (get-var-value state class) 'methods)))))
+  
 ;; gets the closure of an instance from the state
+;; might be another expression, so evaluate it first
 (define get-instance-closure
-  (lambda (instance-name state)
-    (get-var-value state instance-name)))
+  (lambda (instance-name state continuations)
+    (if (list? instance-name)  ; the instance name (lhs of dot) may be another dot, so evaluate
+        (M-value instance-name state continuations)
+        (get-var-value state instance-name))))
 
 ;;;;;;; TODO: do we need these? $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 ;; returns a list of the formal params from the function closure
@@ -282,13 +294,17 @@
 (define get-dot-lhs cadadr)
 
 ;; Get the class name from an expression
+;; If the expression is an object, it gets the class
 (define get-class-name
-  (lambda (expr state)
-    ((lambda (closure)
-       (if (> (hash-count closure) 2)
-         (get-dot-lhs expr)
-         (hash-ref closure 'class)))
-     (get-var-value state (get-dot-lhs expr)))))
+  (lambda (expr state continuations)
+    (if (list? (get-dot-lhs expr))   ; must evaluate the lhs first and then get out the class name
+        (hash-ref (M-value (get-dot-lhs expr) state continuations) 'class)
+        ; else, it's one expression
+        ((lambda (closure)
+           (if (> (hash-count closure) 2)
+               (get-dot-lhs expr)
+               (hash-ref closure 'class)))
+         (get-var-value state (get-dot-lhs expr))))))
 
 (define get-actual-params cddr)
 

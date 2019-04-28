@@ -11,4 +11,3 @@ class A {
       return new A().add(new A().x, new A().y);
         }
 	}
-	
