@@ -131,11 +131,12 @@
                                  (get-actual-params expr)
                                  (push-layer
                                   ((hash-ref method-closure 'env) (get-method-call-name expr) state))
+                                 method-closure
                                  state
                                  continuations)
-			    state)
+                            state)
                     (hash-set* continuations 'return r))))
-         (get-method-closure (get-method-call-name expr) (get-class expr) state))))))
+         (get-method-closure (get-method-call-name expr) (get-class-name expr state) state))))))
 ;; TODO Write helper to get class closure
 
 ;; M-value for creating a new object - returns an object closure
@@ -150,15 +151,23 @@
 ;; state "old state"
 ;; returns the env, not the state
 (define bind-params
-  (lambda (formal actual env state continuations)
+  (lambda (formal actual env closure state continuations)
     (cond
-      [(and (null? formal) (null? actual))       env]
-      ;; formal params and actual params differ in lenght
+      [(and (null? formal) (null? actual))      env]
+      [(eq? (car formal) 'this)                 (bind-params (cdr formal) actual
+                                                             (add-to-state (list (car formal)
+                                                                                 closure)
+                                                                           env)
+                                                             closure
+                                                             state
+                                                             continuations)]
+      ;; formal params and actual params differ in length
       [(or (null? formal) (null? actual))       (error 'error "Function received incorrect number of arguments.")]
       [else                                     (bind-params (cdr formal) (cdr actual)
                                                              (add-to-state (list (car formal)
                                                                                  (M-value (car actual) state continuations))
                                                                            env)
+                                                             closure
                                                              state
                                                              continuations)])))
 
@@ -217,12 +226,20 @@
       [(eq? (caar state) name)      (cadr (cdaadr state))]
       [else                         (get-env-func-class-helper name (list (cdar state) (cdadr state)))])))
 
-
-
 ;; abstracted macros
 (define get-method-def-name cadar)
 (define get-method-call-name (compose car cddadr))
-(define get-class cadadr)
+(define get-dot-lhs cadadr)
+
+;; Get the class name from an expression
+(define get-class-name
+  (lambda (expr state)
+    ((lambda (closure)
+       (if (> (hash-count closure) 2)
+         (get-dot-lhs expr)
+         (hash-ref closure 'class)))
+     (get-var-value state (get-dot-lhs expr)))))
+
 (define get-actual-params cddr)
 
 
@@ -389,47 +406,57 @@
 ;; returns the closure for the class represented as a hashmap
 (define make-class-closure
   (lambda (cls-expr)
-    (make-class-closure-body (cls-bod cls-expr) (cls-name cls-expr) (make-immutable-hash
-                                       (list (cons 'super (get-super cls-expr))
-                                             (cons 'methods '())
-                                             (cons 'const '())
-                                             (cons 'inst-vars '())
-                                             (cons 'static-vars '())
-                                             (cons 'static-vals '()))))))
+    (make-class-closure-body (cls-bod cls-expr)
+                             (cls-name cls-expr)
+                             (make-immutable-hash
+                                 (list (cons 'super (get-super cls-expr))
+                                       (cons 'methods '())
+                                       (cons 'const '())
+                                       (cons 'inst-vars '())
+                                       (cons 'static-vars '())
+                                       (cons 'static-vals '()))))))
 
-
-;; might be broken
 ;; cls-body?
 (define make-class-closure-body
   (lambda (cls-body class-name closure)
     (cond
       [(null? cls-body) (make-constructor closure)]
       [(and (eq? (get-keyword cls-body) 'var) (eq? (list-length (car cls-body)) 2))
-       (make-class-closure-body (cdr cls-body) (hash-set closure
-                                                         'inst-vars
-                                                         (append (hash-ref closure 'inst-vars)
-                                                                 (list (get-var-name cls-body)))
-                                                         'const
-                                                         (append (hash-ref closure 'const)
-                                                                 (list 'null))))]
+       (make-class-closure-body (cdr cls-body) class-name (hash-set closure
+                                                            'inst-vars
+                                                            (append (hash-ref closure 'inst-vars)
+                                                                    (list (get-var-name cls-body)))
+                                                            'const
+                                                            (append (hash-ref closure 'const)
+                                                                    (list 'null))))]
       [(and (eq? (get-keyword cls-body) 'var) (eq? (list-length (car cls-body)) 3))
-       (make-class-closure-body (cdr cls-body) (hash-set* closure
-                                                         'inst-vars
-                                                         (append (hash-ref closure 'inst-vars)
-                                                                 (list (get-var-name cls-body)))
-                                                         'const
-                                                         (append (hash-ref closure 'const)
-                                                                 (list (get-var-init-value cls-body)))))]
-      [(or (eq? (get-keyword cls-body) 'function) (eq? (get-keyword cls-body) 'static-function))
+       (make-class-closure-body (cdr cls-body) class-name (hash-set* closure
+                                                            'inst-vars
+                                                            (append (hash-ref closure 'inst-vars)
+                                                                    (list (get-var-name cls-body)))
+                                                            'const
+                                                            (append (hash-ref closure 'const)
+                                                                    (list (get-var-init-value cls-body)))))]
+      [(eq? (get-keyword cls-body) 'function)
        (make-class-closure-body
-         (cdr cls-body) (hash-set closure
-                                 'methods
-                                 (append (hash-ref closure 'methods)
-                                         (list (make-method-closure (get-method-def-name cls-body)
-                                                                    (get-params cls-body)
-                                                                    (get-method-body cls-body)
-                                                                    get-func-env
-                                                                    class-name)))))]
+         (cdr cls-body) class-name (hash-set closure
+                                     'methods
+                                     (append (hash-ref closure 'methods)
+                                             (list (make-method-closure (get-method-def-name cls-body)
+                                                                        (cons 'this (get-params cls-body))
+                                                                        (get-method-body cls-body)
+                                                                        get-func-env
+                                                                        class-name)))))]
+      [(eq? (get-keyword cls-body) 'static-function)
+       (make-class-closure-body
+         (cdr cls-body) class-name (hash-set closure
+                                     'methods
+                                     (append (hash-ref closure 'methods)
+                                             (list (make-method-closure (get-method-def-name cls-body)
+                                                                        (get-params cls-body)
+                                                                        (get-method-body cls-body)
+                                                                        get-func-env
+                                                                        class-name)))))]
       [else (error 'error "Improper statement in class definition")])))
 
 

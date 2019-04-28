@@ -1,18 +1,28 @@
 class A {
 
-      var a = 8;
-      
-  static function main() {
-  var y = 10;
-  var x = 6;
-  return B.multiply(30, 20);
-  }
+    var a = 8;
+
+    static function main() {
+        var y = 10;
+        var x = 6;
+        var b = new B();
+        return b.makeB().multiply(x, y);
+    }
 
 }
 
 class B {
+    var a = 50;
 
-      function multiply(x, y) {
-         return x * y;
-	 }
-	 }
+    function multiply(x, y) {
+        return x * y;
+    }
+
+    function multa(x) {
+        return a * x;
+    }
+
+    function makeB() {
+        return new B();
+    }
+}
