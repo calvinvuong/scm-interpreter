@@ -124,19 +124,21 @@
   (lambda (expr state continuations)
     (call/cc
      (lambda (r) ;; new continuation for return
-       ((lambda (method-closure)
+       ((lambda (method-closure instance-clos)
          (remove-layer
            (M-state (hash-ref method-closure 'body) ;;get function body
                     (append (bind-params (hash-ref method-closure 'params)
                                  (get-actual-params expr)
                                  (push-layer
                                   ((hash-ref method-closure 'env) (get-method-call-name expr) state))
-                                 method-closure
+                                 instance-clos
                                  state
                                  continuations)
                             state)
                     (hash-set* continuations 'return r))))
-         (get-method-closure (get-method-call-name expr) (get-class-name expr state) state))))))
+         (get-method-closure (get-method-call-name expr) (get-class-name expr state) state)
+         (get-instance-closure (get-dot-lhs expr) state)  ;STUB for the instance closure
+         )))))
 ;; TODO Write helper to get class closure
 
 ;; M-value for creating a new object - returns an object closure
@@ -154,13 +156,16 @@
   (lambda (formal actual env closure state continuations)
     (cond
       [(and (null? formal) (null? actual))      env]
-      [(eq? (car formal) 'this)                 (bind-params (cdr formal) actual
+     [(eq? (car formal) 'this)                 (bind-params (cdr formal) actual
                                                              (add-to-state (list (car formal)
                                                                                  closure)
                                                                            env)
                                                              closure
                                                              state
-                                                             continuations)]
+                                                            continuations)]
+
+      ;[(eq? (car formal) 'this)        (add-to-state (list (car formal) closure) env)]
+
       ;; formal params and actual params differ in length
       [(or (null? formal) (null? actual))       (error 'error "Function received incorrect number of arguments.")]
       [else                                     (bind-params (cdr formal) (cdr actual)
@@ -177,6 +182,11 @@
   (lambda (method-name class state)
       (car (filter (lambda (h) (eq? (hash-ref h 'name) method-name))
               (hash-ref (get-var-value state class) 'methods)))))
+
+;; gets the closure of an instance from the state
+(define get-instance-closure
+  (lambda (instance-name state)
+    (get-var-value state instance-name)))
 
 ;;;;;;; TODO: do we need these? $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 ;; returns a list of the formal params from the function closure
