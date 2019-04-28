@@ -36,7 +36,7 @@
          ;;because we aren't in a structure where we can call them
          ;; assumes main takes no parameters
          ;(cons 'funcall (list (cons 'dot (cons class '(main))))))))))
-         (M-value  (cons 'funcall (list (cons 'dot (cons class '(main)))))
+         (M-value  (cons 'funcall (list (cons 'dot (cons (string->symbol class) '(main)))))
                    (M-state-global (parser filename) initial-state)
                    (initialContinuations return)))))))
 
