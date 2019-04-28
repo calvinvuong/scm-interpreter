@@ -88,7 +88,8 @@
       ;; so look it up in the state
       [(eq? expr 'false)                (cps-return #f)]
       [(eq? expr 'true)                 (cps-return #t)]
-      [(not (list? expr))               (cps-return (get-var-value state expr))]
+      ;; variable
+      [(not (list? expr))               (cps-return (get-var-value-no-dot expr state continuations))] 
       ;; if next exprression's length is 2, it's unary -
       [(and (eq? (list-length expr) 2)
             (eq? (get-operator expr) '-))
@@ -102,7 +103,6 @@
             (list? (exp1 expr)))
         (cps-return (M-value-function expr state continuations))]
       ;; funcall without dot operator
-      ;[(eq? (get-operator expr) 'funcall) (cps-return (M-value-function expr state continuations))]
       [(eq? (get-operator expr) 'funcall) (cps-return (M-value-function-no-dot expr state continuations))]
       [(eq? (get-operator expr) 'new) (cps-return (instance-closure (exp1 expr) state continuations))]
       [(eq? (get-operator expr) 'return) (cps-return (M-value (exp1 expr) state continuations))]
@@ -121,23 +121,31 @@
   (lambda (expr state continuations)
     (M-value-cps expr state (lambda (v) v) continuations)))
 
+;; gets a the variable's value if it is not part of a dot
+;; can either be local or instance variable
+;; calls the proper function
+(define get-var-value-no-dot
+  (lambda (expr state continuations)
+    (if (eq? (find-box expr state) 'none) ; instance var
+        (M-value (list 'dot 'this expr) state continuations)
+        (get-var-value state expr))))
+
 ;; Handles if the funcall had no dot operator
 (define M-value-function-no-dot
   (lambda (expr state continuations)
     (if (eq? (find-box (get-func-name expr) state) 'none) ; If true, method is not local.
         (M-value-function (add-dot-this expr) state continuations)
-        (M-value-function-nested expr state (get-var-value state (get-func-name expr)) continuations)
-        ;state
-        ;(get-var-value state (get-func-name expr)) ; stub for calling function locally
-        )))
+        (M-value-function-nested expr state (get-var-value state (get-func-name expr)) continuations))))
 
-;; takes a funcall expr like (funcall multiply 3 2)
-;; returns a funcall expr like (funcall (dot this multiply) 3 2)
+;; takes a  expr like (funcall multiply 3 2)
+;; returns a expr like (funcall (dot this multiply) 3 2)
+;; works for var too
 (define add-dot-this
   (lambda (expr)
     (append
-     (cons 'funcall (list (list 'dot 'this (get-func-name expr))))
-     (get-func-params expr))))
+     (cons (car expr)
+           (list (cons 'dot (cons 'this (list (exp1 expr))))))
+     (cddr expr))))
 
 ;; Handles funcall of a nested function
 (define M-value-function-nested
@@ -238,7 +246,7 @@
   (lambda (instance-name state continuations)
     (if (list? instance-name)  ; the instance name (lhs of dot) may be another dot, so evaluate
         (M-value instance-name state continuations)
-        (get-var-value state instance-name))))
+        (get-var-value-no-dot instance-name state continuations))))
 
 ;;;;;;; TODO: do we need these? $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 ;; returns a list of the formal params from the function closure
@@ -299,12 +307,12 @@
   (lambda (expr state continuations)
     (if (list? (get-dot-lhs expr))   ; must evaluate the lhs first and then get out the class name
         (hash-ref (M-value (get-dot-lhs expr) state continuations) 'class)
-        ; else, it's one expression
+        ; else, it's one expression, no dot
         ((lambda (closure)
            (if (> (hash-count closure) 2)
                (get-dot-lhs expr)
                (hash-ref closure 'class)))
-         (get-var-value state (get-dot-lhs expr))))))
+         (get-var-value-no-dot (get-dot-lhs expr) state continuations)))))
 
 (define get-actual-params cddr)
 
@@ -773,7 +781,11 @@
   (lambda (expr state continuations)
     (cond
       ;;can't just update binding in the state if we're setting the value of a dot
-      [(eq? (car (exp1 expr)) 'dot) (assign-instance-var expr state continuations)] 
+      [(and (list? (exp1 expr)) (eq? (car (exp1 expr)) 'dot))
+       (assign-instance-var expr state continuations)]
+      [(eq? (find-box (exp1 expr) state) 'none) ;not in local environment, therefore is instance var
+       (assign-instance-var (add-dot-this expr) state continuations)]
+      ;; else it is in local environment
       [(eq? (list-length expr) 3) (update-binding (exp1 expr)
                                                   (M-value (exp2 expr)
                                                            state
@@ -781,6 +793,7 @@
                                                   state)]
       [else (error 'error "Invalid assign.")])))
 
+  
 ;; update the value of an instance variable
 ;; expr is (= (dot x b) val) - x is object, b is field
 (define assign-instance-var
@@ -1076,7 +1089,7 @@
 ; Provide the interpret function for rackunit
 (provide interpret interpret)
 ;(parser "test")
-(interpret "test" 'A)
+(interpret "test" 'List)
 ;(M-state-global (parser "test") initial-state)
 ;(hash-ref (get-var-value (M-state-global (parser "test") initial-state) 'A) 'methods)
 ;(get-body-class 'main 'A (M-state-global (parser "test") initial-state))
