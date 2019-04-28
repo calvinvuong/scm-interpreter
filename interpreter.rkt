@@ -104,7 +104,7 @@
       ;; funcall without dot operator
       ;[(eq? (get-operator expr) 'funcall) (cps-return (M-value-function expr state continuations))]
       [(eq? (get-operator expr) 'funcall) (cps-return (M-value-function-no-dot expr state continuations))]
-      [(eq? (get-operator expr) 'new) (cps-return (instance-closure (exp1 expr) state))]
+      [(eq? (get-operator expr) 'new) (cps-return (instance-closure (exp1 expr) state continuations))]
       [(eq? (get-operator expr) 'return) (cps-return (M-value (exp1 expr) state continuations))]
       [(eq? (list-length expr) 2)        (error 'undefined "Incorrect number of arguments")]
       [(not (eq? (list-length expr) 3))  (error 'undefined "Incorrect number of arguments")]
@@ -185,10 +185,10 @@
 ;; M-value for creating a new object - returns an object closure
 ;; just call the class's constructor
 (define instance-closure
-  (lambda (class state)
+  (lambda (class state continuations)
     (make-immutable-hash
       (list (cons 'class class)
-            (cons 'inst-vals ((hash-ref (get-var-value state class) 'const)))))))
+            (cons 'inst-vals ((hash-ref (get-var-value state class) 'const) state continuations))))))
 
 ;; env "new state" which is what get-func-env returns
 ;; state "old state"
@@ -545,13 +545,13 @@
 
 
 ;; turns the list of field values currently in 'const into a function that just makes
-;; the list of instance variable values
+;; a list of the instance variable values
 (define make-constructor
   (lambda (closure)
     (hash-set closure
               'const
-              (lambda ()
-                (map (lambda (v) (box v)) (hash-ref closure 'const))))))
+              (lambda (state continuations)
+                (map (lambda (v) (box (M-value v state continuations))) (hash-ref closure 'const))))))
 
 ;; returns a STATE whereas M-value-function returns a VALUE
 (define M-state-funcall
