@@ -1,44 +1,14 @@
 class A {
-      var b = 8;
-      var c = 10;
+
+  var x = 100;
+    var y = 10;
+
+  function add(g, h) {
+      return g + h;
+        }
 
   static function main() {
-     function apple(x, y) {
-       function orange(x) {
-         return x - 3;
-	 }
-       return orange(x) - y + 10;
-       }
-     var z = new B();
-     return z.f(apple(50, 4));
-  }
-
-
-function f(x) {
-  return this.square(x);
-  }
-
-function square(x) {
-  return x * x;
-  }
-
-}
-
-class B {
-    
-    function multiply(x, y) {
-         return x * y;
-  }
-
-  function f(x) {
-    function nest(y, l) {
-    return y * l;
-    }
-
-        return nest(x, 10);
-    }
-
-
-
-
-}
+      return new A().add(new A().x, new A().y);
+        }
+	}
+	

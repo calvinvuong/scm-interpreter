@@ -766,7 +766,7 @@
     ((lambda (value-box)
       (cond
         [(eq? (unbox value-box) 'none)            (error 'undeclared "Instance variable does not exist!")]
-        [else                                        (begin (set-box! value-box (exp2 expr))
+        [else                                        (begin (set-box! value-box (M-value (exp2 expr) state continuations))
                                                           state)]))
      (get-instance-value-box (exp2 (exp1 expr))
                              (M-value (exp1 (exp1 expr))
