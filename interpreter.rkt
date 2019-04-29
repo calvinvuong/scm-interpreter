@@ -1045,7 +1045,7 @@
                    (push-layer state)
                    (hash-set continuations
                              'continue
-                             (lambda () (cont (push-layer state))))))))))
+                             (lambda (v) (cont (push-layer state))))))))))
 
 ;; Adds a new layer to top of state
 (define push-layer
