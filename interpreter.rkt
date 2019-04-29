@@ -250,11 +250,17 @@
   
 ;; gets the closure of an instance from the state
 ;; might be another expression, so evaluate it first
+;; if we're calling super.method(), use this.method() but change this to be a member of the superclass
 (define get-instance-closure
   (lambda (instance-name state continuations)
     (cond
       [(list? instance-name)      (M-value instance-name state continuations)]
-      [(eq? instance-name 'super) (get-var-value-no-dot 'this state continuations)]
+      [(eq? instance-name 'super) (hash-set
+                                    (get-var-value-no-dot 'this state continuations)
+                                    'class
+                                    (hash-ref (get-var-value state (hash-ref (get-var-value state 'this) 
+                                                                             'class))
+                                              'super))]
       [else                       (get-var-value-no-dot instance-name state continuations)])))
 
 ;; returns the function for get-env in the closure
@@ -286,7 +292,9 @@
     (cond
       ;; must evaluate the lhs first
       [(list? expr)         (hash-ref (M-value expr state continuations) 'class)]
-      [(eq? expr 'super)    (hash-ref (get-var-value state (hash-ref (get-var-value state 'this) 'class)) 'super)]
+      [(eq? expr 'super)    (hash-ref (get-var-value state (hash-ref (get-var-value state 'this) 
+                                                                     'class)) 
+                                      'super)]
       ;; one expression, no dot
       [else                    ((lambda (closure)
                                   (if (> (hash-count closure) 2)
@@ -335,16 +343,18 @@
                   continuations))))
 
 ;;get the value of intance variable var from an object closure
-;;subtract the found index from the length of the field list
+;;subtract the found index from the length of the field list, access this index in inst-vals
 (define get-instance-value-box
   (lambda (var object-closure state)
-    (list-ref (hash-ref object-closure 'inst-vals)
-              (- (- (length (hash-ref object-closure 'inst-vals)) 
-                    (get-var-index var 
-                                   (hash-ref (get-var-value state 
-                                                            (hash-ref object-closure 'class))
-                                             'inst-vars)))
-                 1))))
+    ((lambda (inst-vars)
+     (list-ref (hash-ref object-closure 'inst-vals)
+               (- (- (length inst-vars) 
+                     (get-var-index var 
+                                    inst-vars))
+                  1)))
+     (hash-ref (get-var-value state 
+                              (hash-ref object-closure 'class))
+               'inst-vars))))
 
 ;;get index of var in a class' list of instance variable names
 (define get-var-index
@@ -1087,7 +1097,7 @@
 ; Provide the interpret function for rackunit
 (provide interpret interpret)
 ;(parser "test")
-(interpret "test" "C")
-;(M-state-global (parser "test") initial-state)
+;(interpret "test" "C")
+(M-state-global (parser "test") initial-state)
 ;(hash-ref (get-var-value (M-state-global (parser "test") initial-state) 'A) 'methods)
 ;(get-body-class 'main 'A (M-state-global (parser "test") initial-state))
