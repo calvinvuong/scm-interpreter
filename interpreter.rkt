@@ -88,8 +88,10 @@
       ;; so look it up in the state
       [(eq? expr 'false)                (cps-return #f)]
       [(eq? expr 'true)                 (cps-return #t)]
+      
       ;; variable
-      [(not (list? expr))               (cps-return (get-var-value-no-dot expr state continuations))] 
+      
+      [(not (list? expr))               (cps-return (get-var-value-no-dot expr state continuations))]
       ;; if next exprression's length is 2, it's unary -
       [(and (eq? (list-length expr) 2)
             (eq? (get-operator expr) '-))
@@ -114,6 +116,7 @@
       [(eq? (get-operator expr) '*) (M-value-math-operator expr state * cps-return continuations)]
       [(eq? (get-operator expr) '/) (M-value-math-operator expr state quotient cps-return continuations)]
       [(eq? (get-operator expr) '%) (M-value-math-operator expr state remainder cps-return continuations)]
+
       [else (cps-return (M-boolean expr state continuations))])))
 
 ;;calls M-value-cps
@@ -126,16 +129,21 @@
 ;; calls the proper function
 (define get-var-value-no-dot
   (lambda (expr state continuations)
-    (if (eq? (find-box expr state) 'none) ; instance var
+    (cond
+      [(eq? (find-box expr state) 'none) (M-value (list 'dot 'this expr) state continuations)]
+      [else                              (get-var-value state expr)])))
+
+#|(if (and (eq? (find-box expr state) 'none) (not (eq? expr 'this))) ; instance var
         (M-value (list 'dot 'this expr) state continuations)
         (get-var-value state expr))))
-
+|#
 ;; Handles if the funcall had no dot operator
 (define M-value-function-no-dot
   (lambda (expr state continuations)
     (if (eq? (find-box (get-func-name expr) state) 'none) ; If true, method is not local.
         (M-value-function (add-dot-this expr) state continuations)
         (M-value-function-nested expr state (get-var-value state (get-func-name expr)) continuations))))
+        
 
 ;; takes a  expr like (funcall multiply 3 2)
 ;; returns a expr like (funcall (dot this multiply) 3 2)
@@ -154,13 +162,14 @@
      (lambda (r) ;; new continuation for return
     (remove-layer
       (M-state (hash-ref closure 'body)
-               (bind-params (hash-ref closure 'params)
+               (append (bind-params (hash-ref closure 'params)
                             (get-actual-params expr)
                             (push-layer
                              ((hash-ref closure 'env) (hash-ref closure 'name) state))
                             '() ; doesn't matter what the instance closure will be
                             state
                             continuations)
+                       state)
                (hash-set* continuations 'return r)))))))
 
 ;; macros for parsing funcall w/o dot operator
@@ -183,7 +192,7 @@
                                  instance-clos
                                  state
                                  continuations)
-                            state)
+                            state) ;hacky
                     (hash-set* continuations 'return r))))
          (get-method-closure (get-method-call-name expr) (get-class-name expr state continuations) state continuations)
          (get-instance-closure (get-dot-lhs expr) state continuations)  ;STUB for the instance closure
@@ -1089,7 +1098,7 @@
 ; Provide the interpret function for rackunit
 (provide interpret interpret)
 ;(parser "test")
-(interpret "test" 'List)
+(interpret "test" "List")
 ;(M-state-global (parser "test") initial-state)
 ;(hash-ref (get-var-value (M-state-global (parser "test") initial-state) 'A) 'methods)
 ;(get-body-class 'main 'A (M-state-global (parser "test") initial-state))
