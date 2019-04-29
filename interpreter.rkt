@@ -256,37 +256,6 @@
         (M-value instance-name state continuations)
         (get-var-value-no-dot instance-name state continuations))))
 
-;;;;;;; TODO: do we need these? $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
-;; returns a list of the formal params from the function closure
-(define get-formal-params-class
-  (lambda (name class state)
-    (get-formal-params-class-helper name (hash-ref (get-var-value state class) 'methods))))
-
-(define get-formal-params-class-helper
-  (lambda (name state)
-    (cond
-      [(null? (car state))         (error 'error "Nothing found.")]
-      [(eq? (caar state) name)     (caaadr state)]
-      [else                        (get-formal-params-class-helper name (list (cdar state) (cdadr state)))])))
-
-(define get-body
-  (lambda (name state)
-    (cadr (get-var-value state name))))
-
-;; gets the body of the function name that resides within class
-(define get-body-class
-  (lambda (name class state)
-    (get-body-class-helper name (hash-ref (get-var-value state class) 'methods))))
-
-(define get-body-class-helper
-  (lambda (name state)
-    (cond
-      [(null? (car state))       (error 'error "Nothing found.")]
-      [(eq? (caar state) name)   (car (cdaadr state))]
-      [else                      (get-body-class-helper name (list (cdar state) (cdadr state)))])))
-;;;;;;; TODO: do we need these?$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
-
-
 ;; returns the function for get-env in the closure
 (define get-env-func
   (lambda (name state)
@@ -500,7 +469,7 @@
   (lambda (cls-expr)
     (if (null? (caddr cls-expr))
         '()
-        (cdr (caddr cls-expr)))))
+        (cadr (caddr cls-expr)))))
 
 ;; gets the body of a class from the entire class definition
 (define cls-bod cadddr)
@@ -520,67 +489,75 @@
 ;; returns the state after a class closure has been added to it
 (define M-state-class
   (lambda (cls-expr state)
-    (add-to-state (list (cls-name cls-expr) (make-class-closure cls-expr)) state)))
+    (add-to-state (list (cls-name cls-expr) (make-class-closure cls-expr state)) state)))
 
 ;; returns the closure for the class represented as a hashmap
 (define make-class-closure
-  (lambda (cls-expr)
-    (make-class-closure-body (cls-bod cls-expr)
-                             (cls-name cls-expr)
-                             (make-immutable-hash
-                                 (list (cons 'super (get-super cls-expr))
-                                       (cons 'methods '())
-                                       (cons 'const '())
-                                       (cons 'inst-vars '())
-                                       (cons 'static-vars '())
-                                       (cons 'static-vals '()))))))
+  (lambda (cls-expr state)
+    (if (null? (get-super cls-expr))
+        (make-class-closure-body (cls-bod cls-expr)
+                                 (cls-name cls-expr)
+                                 (make-immutable-hash
+                                     (list (cons 'super '())
+                                           (cons 'methods '())
+                                           (cons 'const '())
+                                           (cons 'inst-init-values '())
+                                           (cons 'inst-vars '())
+                                           (cons 'static-vars '())
+                                           (cons 'static-vals '()))))
+        (make-class-closure-body (cls-bod cls-expr)
+                                 (cls-name cls-expr)
+                                 (hash-set (get-var-value state (get-super cls-expr))
+                                           'super
+                                           (get-super cls-expr))))))
 
 ;; cls-body?
 (define make-class-closure-body
   (lambda (cls-body class-name closure)
     (cond
       [(null? cls-body) (make-constructor closure)]
-      ;;uninitialized variables: const stores the values - put these in backwards. 
+      ;;uninitialized variables: inst-vars stores the variable names - put these in backwards. 
       [(and (eq? (get-keyword cls-body) 'var) (eq? (list-length (car cls-body)) 2))
        (make-class-closure-body (cdr cls-body) class-name (hash-set* closure
                                                             'inst-vars
-                                                            (append (hash-ref closure 'inst-vars)
-                                                                    (list (get-var-name cls-body)))
-                                                            'const
-                                                            (cons 'null (hash-ref closure 'const))))]
+                                                            (cons (get-var-name cls-body)
+                                                                  (hash-ref closure 'inst-vars))
+                                                            'inst-init-values
+                                                            (append (hash-ref closure 'inst-init-values)
+                                                                    (list 'null))))]
       ;;initialized varibles
       [(and (eq? (get-keyword cls-body) 'var) (eq? (list-length (car cls-body)) 3))
        (make-class-closure-body (cdr cls-body) class-name (hash-set* closure
                                                             'inst-vars
-                                                            (append (hash-ref closure 'inst-vars)
-                                                                    (list (get-var-name cls-body)))
-                                                            'const
-                                                            (cons (get-var-init-value cls-body)
-                                                                  (hash-ref closure 'const))))]
+                                                            (cons (get-var-name cls-body)
+                                                                    (hash-ref closure 'inst-vars))
+                                                            'inst-init-values
+                                                            (append (hash-ref closure 'inst-init-values)
+                                                                    (list (get-var-init-value cls-body)))))]
       [(eq? (get-keyword cls-body) 'function)
        (make-class-closure-body
          (cdr cls-body) class-name (hash-set closure
                                      'methods
-                                     (append (hash-ref closure 'methods)
-                                             (list (make-method-closure (get-method-def-name cls-body)
+                                     (cons (make-method-closure (get-method-def-name cls-body)
                                                                         (cons 'this (get-params cls-body))
                                                                         (get-method-body cls-body)
                                                                         get-func-env
-                                                                        class-name)))))]
+                                                                        class-name)
+                                           (hash-ref closure 'methods))))]
       [(eq? (get-keyword cls-body) 'static-function)
        (make-class-closure-body
          (cdr cls-body) class-name (hash-set closure
                                      'methods
-                                     (append (hash-ref closure 'methods)
-                                             (list (make-method-closure (get-method-def-name cls-body)
+                                     (cons (make-method-closure (get-method-def-name cls-body)
                                                                         (get-params cls-body)
                                                                         (get-method-body cls-body)
                                                                         get-func-env
-                                                                        class-name)))))]
+                                                                        class-name)
+                                           (hash-ref closure 'methods))))]
       [else (error 'error "Improper statement in class definition")])))
 
 
-;; turns the list of field values currently in 'const into a function that just makes
+;; turns the list of field values currently in 'inst-init-values into a function that just makes
 ;; a list of the instance variable values
 (define make-constructor
   (lambda (closure)
@@ -592,7 +569,7 @@
                          (if (eq? v 'null)
                            'null 
                            (M-value v state continuations))))
-                     (hash-ref closure 'const))))))
+                     (hash-ref closure 'inst-init-values))))))
 
 ;; returns a STATE whereas M-value-function returns a VALUE
 (define M-state-funcall
@@ -1099,6 +1076,6 @@
 (provide interpret interpret)
 ;(parser "test")
 (interpret "test" "List")
-;(M-state-global (parser "test") initial-state)
+; (M-state-global (parser "test") initial-state)
 ;(hash-ref (get-var-value (M-state-global (parser "test") initial-state) 'A) 'methods)
 ;(get-body-class 'main 'A (M-state-global (parser "test") initial-state))
