@@ -1075,7 +1075,7 @@
 ; Provide the interpret function for rackunit
 (provide interpret interpret)
 ;(parser "test")
-(interpret "test" "C")
+;(interpret "test" "C")
 ;(M-state-global (parser "test") initial-state)
 ;(hash-ref (get-var-value (M-state-global (parser "test") initial-state) 'A) 'methods)
 ;(get-body-class 'main 'A (M-state-global (parser "test") initial-state))

@@ -32,7 +32,7 @@
     (test-equal?    "Part 4 test 12"
                     (interpret "tests/test4-12" "List")     5285)
     (test-equal?    "Part 4 test 13"
-                    (interpret "tests/test4-13" "C")        716)
+                    (interpret "tests/test4-13" "C")        -716)
     ))
 
 ;; Run suite of tests for part 3
@@ -41,45 +41,45 @@
     "Tests for part 3"
 
     (test-equal?    "A main with code inside"
-                    (interpret "tests/test3-1")   10)
+                    (interpret "tests/test3-1" "A")   10)
     (test-equal?    "A function that uses global variables"
-                    (interpret "tests/test3-2")   14)
+                    (interpret "tests/test3-2" "A")   14)
     (test-equal?    "A function that changes global variables"
-                    (interpret "tests/test3-3")   45)
+                    (interpret "tests/test3-3" "A")   45)
     (test-equal?    "A recursive function"
-                    (interpret "tests/test3-4")   55)
+                    (interpret "tests/test3-4" "A")   55)
     (test-equal?    "Functions with multiple params that hide global vars"
-                    (interpret "tests/test3-5")   1)
+                    (interpret "tests/test3-5" "A")   1)
     (test-equal?    "Using static scoping instead of dynamic"
-                    (interpret "tests/test3-6")   115)
+                    (interpret "tests/test3-6" "A")   115)
     (test-equal?    "Boolean parameters and return values"
-                    (interpret "tests/test3-7")   'true)
+                    (interpret "tests/test3-7" "A")   'true)
     (test-equal?    "Multiple function calls in an expression"
-                    (interpret "tests/test3-8")   20)
+                    (interpret "tests/test3-8" "A")   20)
     (test-equal?    "Function call in parameter of a function"
-                    (interpret "tests/test3-9")   24)
+                    (interpret "tests/test3-9" "A")   24)
     (test-equal?    "Function call that ignores return value"
-                    (interpret "tests/test3-10")   2)
+                    (interpret "tests/test3-10" "A")   2)
     (test-equal?    "Function without a return statement"
-                    (interpret "tests/test3-11")  35)
+                    (interpret "tests/test3-11" "A")  35)
     (test-exn       "Mismatched parameters"
-                    exn:fail? (interpret "tests/test3-12"))
+                    exn:fail? (interpret "tests/test3-12" "A"))
     (test-equal?    "Nested functions"
-                    (interpret "tests/test3-13")  90)
+                    (interpret "tests/test3-13" "A")  90)
     (test-equal?    "Functions inside functions accessing variables outside"
-                    (interpret "tests/test3-14")  69)
+                    (interpret "tests/test3-14" "A")  69)
     (test-equal?    "Nested functions with vars of the same name"
-                    (interpret "tests/test3-15")  87)
+                    (interpret "tests/test3-15" "A")  87)
     (test-equal?    "Triple-nested functions"
-                    (interpret "tests/test3-16")  64)
+                    (interpret "tests/test3-16" "A")  64)
     (test-exn       "Nested function accessing variables out of its scope"
-                    exn:fail? (interpret "tests/test3-17"))
+                    exn:fail? (interpret "tests/test3-17" "A"))
     (test-equal?    "Try/catch/finally without throwing an exception"
-                    (interpret "tests/test3-18")  125)
+                    (interpret "tests/test3-18" "A")  125)
     (test-equal?    "Throwing exception inside a function"
-                    (interpret "tests/test3-19")  100)
+                    (interpret "tests/test3-19" "A")  100)
     (test-equal?    "Throwing exception from a function"
-                    (interpret "tests/test3-20")  2000400)
+                    (interpret "tests/test3-20" "A")  2000400)
     ))
 
 (define part2-tests
@@ -87,43 +87,45 @@
     "Tests for part 2"
 
     (test-equal?    "Test 1"
-                    (interpret "tests/test2-1")   20)
+                    (interpret "tests/test2-1" "A")   20)
     (test-equal?    "Test 2"
-                    (interpret "tests/test2-2")   164)
+                    (interpret "tests/test2-2" "A")   164)
     (test-equal?    "Test 3"
-                    (interpret "tests/test2-3")   32)
+                    (interpret "tests/test2-3" "A")   32)
     (test-equal?    "Test 4"
-                    (interpret "tests/test2-4")   2)
+                    (interpret "tests/test2-4" "A")   2)
     (test-exn       "Test 5"
-                    exn:fail? (interpret "tests/test2-5"))
+                    exn:fail? (interpret "tests/test2-5" "A"))
     (test-equal?    "Test 6"
-                    (interpret "tests/test2-6")   25)
+                    (interpret "tests/test2-6" "A")   25)
     (test-equal?    "Test 7"
-                    (interpret "tests/test2-7")   21)
+                    (interpret "tests/test2-7" "A")   21)
     (test-equal?    "Test 8"
-                    (interpret "tests/test2-8")   6)
+                    (interpret "tests/test2-8" "A")   6)
     (test-equal?    "Test 9"
-                    (interpret "tests/test2-9")   -1)
+                    (interpret "tests/test2-9" "A")   -1)
     (test-equal?    "Test 10"
-                    (interpret "tests/test2-10")   789)
+                    (interpret "tests/test2-10" "A")   789)
     (test-exn       "Test 11"
-                    exn:fail? (interpret "tests/test2-11"))
+                    exn:fail? (interpret "tests/test2-11" "A"))
     (test-exn       "Test 12"
-                    exn:fail? (interpret "tests/test2-12"))
+                    exn:fail? (interpret "tests/test2-12" "A"))
     (test-exn       "Test 13"
-                    exn:fail? (interpret "tests/test2-13"))
+                    exn:fail? (interpret "tests/test2-13" "A"))
     (test-equal?    "Test 14"
-                    (interpret "tests/test2-14")  12)
+                    (interpret "tests/test2-14" "A")  12)
     (test-equal?    "Test 15"
-                    (interpret "tests/test2-15")  125)
+                    (interpret "tests/test2-15" "A")  125)
     (test-equal?    "Test 16"
-                    (interpret "tests/test2-16")  110)
+                    (interpret "tests/test2-16" "A")  110)
     (test-equal?    "Test 17"
-                    (interpret "tests/test2-17")  2000400)
+                    (interpret "tests/test2-17" "A")  2000400)
     (test-equal?    "Test 18"
-                    (interpret "tests/test2-18")  101)
+                    (interpret "tests/test2-18" "A")  101)
     (test-exn       "Test 19"
-                    exn:fail? (interpret "tests/test2-19"))
+                    exn:fail? (interpret "tests/test2-19" "A"))
     ))
 
+(run-tests part2-tests)
+(run-tests part3-tests)
 (run-tests part4-tests)

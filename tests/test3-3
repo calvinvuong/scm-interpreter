@@ -1,3 +1,4 @@
+class A {
 var x = 1;
 var y = 10;
 var r = 0;
@@ -9,3 +10,5 @@ static function main() {
   }
   return r;
 }
+}
+

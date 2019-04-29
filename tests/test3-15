@@ -1,3 +1,4 @@
+class A {
 function f(n) {
   var a;
   var b;
@@ -26,3 +27,6 @@ static function main() {
 
   return x - y;
 }
+
+}
+
