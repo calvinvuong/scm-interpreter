@@ -669,9 +669,9 @@
                                                                state
                                                                continuations))]
       ; a "goto" construct break
-      [(eq? (get-keyword expr) 'break)      ((hash-ref continuations 'break))]
+      [(eq? (get-keyword expr) 'break)      ((hash-ref continuations 'break) '())]
       ; a "goto" construct continue
-      [(eq? (get-keyword expr) 'continue)   ((hash-ref continuations 'continue))]
+      [(eq? (get-keyword expr) 'continue)   ((hash-ref continuations 'continue) '())]
       [(eq? (get-keyword expr) 'throw)      ((hash-ref continuations 'throw)
                                                (get-throw-value
                                                 expr state continuations))]
@@ -703,7 +703,7 @@
                                                                        (hash-set
                                                                          continuations
                                                                          'break
-                                                                         (lambda () (br state))))))
+                                                                         (lambda (v) (br state))))))
                                                       continuations)]
 
       [(eq? (get-keyword expr) 'begin)      (M-state (cdr expr)
@@ -1075,7 +1075,7 @@
 ; Provide the interpret function for rackunit
 (provide interpret interpret)
 ;(parser "test")
-(interpret "test" "List")
-; (M-state-global (parser "test") initial-state)
+(interpret "test" "C")
+;(M-state-global (parser "test") initial-state)
 ;(hash-ref (get-var-value (M-state-global (parser "test") initial-state) 'A) 'methods)
 ;(get-body-class 'main 'A (M-state-global (parser "test") initial-state))
