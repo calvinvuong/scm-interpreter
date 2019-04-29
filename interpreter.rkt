@@ -194,7 +194,7 @@
                                  continuations)
                             state) ;hacky
                     (hash-set* continuations 'return r))))
-         (get-method-closure (get-method-call-name expr) (get-class-name expr state continuations) state continuations)
+         (get-method-closure (get-method-call-name expr) (get-class-name (get-dot-lhs expr) state continuations) state continuations)
          (get-instance-closure (get-dot-lhs expr) state continuations)  ;STUB for the instance closure
          )))))
 
@@ -252,9 +252,10 @@
 ;; might be another expression, so evaluate it first
 (define get-instance-closure
   (lambda (instance-name state continuations)
-    (if (list? instance-name)  ; the instance name (lhs of dot) may be another dot, so evaluate
-        (M-value instance-name state continuations)
-        (get-var-value-no-dot instance-name state continuations))))
+    (cond
+      [(list? instance-name)      (M-value instance-name state continuations)]
+      [(eq? instance-name 'super) (get-var-value-no-dot 'this state continuations)]
+      [else                       (get-var-value-no-dot instance-name state continuations)])))
 
 ;; returns the function for get-env in the closure
 (define get-env-func
@@ -282,14 +283,25 @@
 ;; If the expression is an object, it gets the class
 (define get-class-name
   (lambda (expr state continuations)
-    (if (list? (get-dot-lhs expr))   ; must evaluate the lhs first and then get out the class name
-        (hash-ref (M-value (get-dot-lhs expr) state continuations) 'class)
+    (cond
+      ;; must evaluate the lhs first
+      [(list? expr)         (hash-ref (M-value expr state continuations) 'class)]
+      [(eq? expr 'super)    (hash-ref (get-var-value state (hash-ref (get-var-value state 'this) 'class)) 'super)]
+      ;; one expression, no dot
+      [else                    ((lambda (closure)
+                                  (if (> (hash-count closure) 2)
+                                      expr
+                                      (hash-ref closure 'class)))
+                                (get-var-value-no-dot expr state continuations))])))
+                            
+    #|(if (list? expr))   ; must evaluate the lhs first and then get out the class name
+        (hash-ref (M-value expr state continuations) 'class)
         ; else, it's one expression, no dot
         ((lambda (closure)
            (if (> (hash-count closure) 2)
-               (get-dot-lhs expr)
+               expr
                (hash-ref closure 'class)))
-         (get-var-value-no-dot (get-dot-lhs expr) state continuations)))))
+         (get-var-value-no-dot expr state continuations))))) |#
 
 (define get-actual-params cddr)
 
@@ -669,9 +681,9 @@
                                                                state
                                                                continuations))]
       ; a "goto" construct break
-      [(eq? (get-keyword expr) 'break)      ((hash-ref continuations 'break) '())]
+      [(eq? (get-keyword expr) 'break)      ((hash-ref continuations 'break))]
       ; a "goto" construct continue
-      [(eq? (get-keyword expr) 'continue)   ((hash-ref continuations 'continue) '())]
+      [(eq? (get-keyword expr) 'continue)   ((hash-ref continuations 'continue))]
       [(eq? (get-keyword expr) 'throw)      ((hash-ref continuations 'throw)
                                                (get-throw-value
                                                 expr state continuations))]
@@ -703,7 +715,7 @@
                                                                        (hash-set
                                                                          continuations
                                                                          'break
-                                                                         (lambda (v) (br state))))))
+                                                                         (lambda () (br state))))))
                                                       continuations)]
 
       [(eq? (get-keyword expr) 'begin)      (M-state (cdr expr)
@@ -1075,7 +1087,7 @@
 ; Provide the interpret function for rackunit
 (provide interpret interpret)
 ;(parser "test")
-(interpret "test" "C")
-;(M-state-global (parser "test") initial-state)
+(interpret "test" "A")
+; (M-state-global (parser "test") initial-state)
 ;(hash-ref (get-var-value (M-state-global (parser "test") initial-state) 'A) 'methods)
 ;(get-body-class 'main 'A (M-state-global (parser "test") initial-state))
