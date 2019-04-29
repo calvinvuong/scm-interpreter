@@ -7,6 +7,6 @@ function fib(a) {
     return fib(a-1) + fib(a-2);
 }
 
-function main() {
+static function main() {
   return fib(10);
 }

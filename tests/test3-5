@@ -18,7 +18,7 @@ var z = 30;
 var min1 = min(x,y,z);
 var min2 = min(z,y,x);
 
-function main() {
+static function main() {
   var min3 = min(y,z,x);
 
   if (min1 == min3)

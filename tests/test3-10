@@ -6,7 +6,7 @@ function f(a,b) {
   return a;
 }
 
-function main() {
+static function main() {
   f(1, 2);
   f(3, 4);
   return count;

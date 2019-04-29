@@ -1,4 +1,4 @@
-function main() {
+static function main() {
 var x = 0;
 var y = x;
 var z = y;

@@ -20,7 +20,7 @@ function f(n) {
   return a + b + c;
 }
 
-function main() {
+static function main() {
   var x = f(10);
   var y = f(20);
 
