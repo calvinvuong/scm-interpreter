@@ -32,7 +32,7 @@
     (test-equal?    "Part 4 test 12"
                     (interpret "tests/test4-12" "List")     5285)
     (test-equal?    "Part 4 test 13"
-                    (interpret "tests/test4-13" "C")        716)
+                    (interpret "tests/test4-13" "C")        -716)
     ))
 
 ;; Run suite of tests for part 3
