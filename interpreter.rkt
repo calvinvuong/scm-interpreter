@@ -197,7 +197,6 @@
          (get-method-closure (get-method-call-name expr) (get-class-name expr state continuations) state continuations)
          (get-instance-closure (get-dot-lhs expr) state continuations)  ;STUB for the instance closure
          )))))
-;; TODO Write helper to get class closure
 
 ;; M-value for creating a new object - returns an object closure
 ;; just call the class's constructor
@@ -355,13 +354,16 @@
                   continuations))))
 
 ;;get the value of intance variable var from an object closure
+;;subtract the found index from the length of the field list
 (define get-instance-value-box
   (lambda (var object-closure state)
     (list-ref (hash-ref object-closure 'inst-vals)
-              (get-var-index var 
-                             (hash-ref (get-var-value state 
-                                                      (hash-ref object-closure 'class))
-                                       'inst-vars)))))
+              (- (- (length (hash-ref object-closure 'inst-vals)) 
+                    (get-var-index var 
+                                   (hash-ref (get-var-value state 
+                                                            (hash-ref object-closure 'class))
+                                             'inst-vars)))
+                 1))))
 
 ;;get index of var in a class' list of instance variable names
 (define get-var-index
@@ -538,22 +540,23 @@
   (lambda (cls-body class-name closure)
     (cond
       [(null? cls-body) (make-constructor closure)]
+      ;;uninitialized variables: const stores the values - put these in backwards. 
       [(and (eq? (get-keyword cls-body) 'var) (eq? (list-length (car cls-body)) 2))
        (make-class-closure-body (cdr cls-body) class-name (hash-set* closure
                                                             'inst-vars
                                                             (append (hash-ref closure 'inst-vars)
                                                                     (list (get-var-name cls-body)))
                                                             'const
-                                                            (append (hash-ref closure 'const)
-                                                                    (list 'null))))]
+                                                            (cons 'null (hash-ref closure 'const))))]
+      ;;initialized varibles
       [(and (eq? (get-keyword cls-body) 'var) (eq? (list-length (car cls-body)) 3))
        (make-class-closure-body (cdr cls-body) class-name (hash-set* closure
                                                             'inst-vars
                                                             (append (hash-ref closure 'inst-vars)
                                                                     (list (get-var-name cls-body)))
                                                             'const
-                                                            (append (hash-ref closure 'const)
-                                                                    (list (get-var-init-value cls-body)))))]
+                                                            (cons (get-var-init-value cls-body)
+                                                                  (hash-ref closure 'const))))]
       [(eq? (get-keyword cls-body) 'function)
        (make-class-closure-body
          (cdr cls-body) class-name (hash-set closure
@@ -1073,9 +1076,6 @@
     (cons empty-layer state)))
 
 (define remove-layer cdr)
-
-
-
 
 ; ----- Macros -----
 (define empty-layer '(()()))
