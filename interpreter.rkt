@@ -197,13 +197,14 @@
                                  type
                                  continuations)
                             state) ;hacky
-                    type
+                    ;type
+                    (hash-ref method-closure 'class-name)
                     (hash-set* continuations 'return r))))
          (get-method-closure (get-method-call-name expr)
                              (get-class-name (get-dot-lhs expr) state type continuations)
                              state
                              continuations)
-         (get-instance-closure (get-dot-lhs expr) state type continuations)  ;STUB for the instance closure
+         (get-instance-closure (get-dot-lhs expr) state type continuations)
          )))))
 
 ;; M-value for creating a new object - returns an object closure
@@ -337,7 +338,8 @@
                                                     (hash-ref (get-var-value state (hash-ref (get-var-value state 'this)
                                                                                              'class))
                                                               'super))
-                                                   state)))
+                                                   state
+                                                   type)))
         ((lambda (value)
            (if (eq? value 'null)
              (error 'error "instance variable not initialized!")
@@ -348,13 +350,14 @@
                       (lambda (v)
                         (cps-return (unbox (get-instance-value-box (exp2 expr)
                                                                    v
-                                                                   state))))
+                                                                   state
+                                                                   type))))
                       continuations)))))
 
 ;;get the value of intance variable var from an object closure
 ;;subtract the found index from the length of the field list, access this index in inst-vals
 (define get-instance-value-box
-  (lambda (var object-closure state)
+  (lambda (var object-closure state type)
     ((lambda (inst-vars)
      (list-ref (hash-ref object-closure 'inst-vals)
                (- (- (length inst-vars)
@@ -362,7 +365,8 @@
                                     inst-vars))
                   1)))
      (hash-ref (get-var-value state
-                              (hash-ref object-closure 'class))
+                              type)
+                              ;(hash-ref object-closure 'class))
                'inst-vars))))
 
 ;;get index of var in a class' list of instance variable names
@@ -847,7 +851,8 @@
                                       state
                                       type
                                       continuations)
-                             state))))
+                             state
+                             type))))
 
 ;; return does not update state, so just pass control to M-value
 ;; checks if valid length
@@ -1154,7 +1159,7 @@
 ; Provide the interpret function for rackunit
 (provide interpret interpret)
 ;(parser "test")
-;(interpret "tests/test4-11" "List")
+(interpret "test" "C")
 ;(M-state-global (parser "test") initial-state)
 ;(hash-ref (get-var-value (M-state-global (parser "test") initial-state) 'A) 'methods)
 ;(get-body-class 'main 'A (M-state-global (parser "test") initial-state))
