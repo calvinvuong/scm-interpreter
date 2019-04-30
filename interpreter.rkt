@@ -194,7 +194,10 @@
                                  continuations)
                             state) ;hacky
                     (hash-set* continuations 'return r))))
-         (get-method-closure (get-method-call-name expr) (get-class-name (get-dot-lhs expr) state continuations) state continuations)
+         (get-method-closure (get-method-call-name expr) 
+                             (get-class-name (get-dot-lhs expr) state type continuations) 
+                             state 
+                             continuations)
          (get-instance-closure (get-dot-lhs expr) state continuations)  ;STUB for the instance closure
          )))))
 
@@ -250,17 +253,12 @@
   
 ;; gets the closure of an instance from the state
 ;; might be another expression, so evaluate it first
-;; if we're calling super.method(), use this.method() but change this to be a member of the superclass
+;; if we're calling super.method(), use this.method() 
 (define get-instance-closure
   (lambda (instance-name state continuations)
     (cond
       [(list? instance-name)      (M-value instance-name state continuations)]
-      [(eq? instance-name 'super) (hash-set
-                                    (get-var-value-no-dot 'this state continuations)
-                                    'class
-                                    (hash-ref (get-var-value state (hash-ref (get-var-value state 'this) 
-                                                                             'class))
-                                              'super))]
+      [(eq? instance-name 'super) (get-var-value-no-dot 'this state continuations)]
       [else                       (get-var-value-no-dot instance-name state continuations)])))
 
 ;; returns the function for get-env in the closure
@@ -287,13 +285,13 @@
 
 ;; Get the class name from an expression
 ;; If the expression is an object, it gets the class
+;; if super, get the current type's supeclass's method
 (define get-class-name
-  (lambda (expr state continuations)
+  (lambda (expr state type continuations)
     (cond
       ;; must evaluate the lhs first
       [(list? expr)         (hash-ref (M-value expr state continuations) 'class)]
-      [(eq? expr 'super)    (hash-ref (get-var-value state (hash-ref (get-var-value state 'this) 
-                                                                     'class)) 
+      [(eq? expr 'super)    (hash-ref (get-var-value state type)
                                       'super)]
       ;; one expression, no dot
       [else                    ((lambda (closure)
@@ -328,19 +326,30 @@
                  continuations)))
 
 ;;when M-value-cps is given a dot
+;;if the left side of the dot is 'super', just do this.x, but set this's class
+;;to be its current superclass.
 (define M-value-dot
   (lambda (expr state cps-return continuations)
-    ((lambda (value)
-       (if (eq? value 'null)
-         (error 'error "instance variable not initialized!")
-         value))
-     (M-value-cps (exp1 expr)
-                  state
-                  (lambda (v)
-                    (cps-return (unbox (get-instance-value-box (exp2 expr) 
-                                                               v
-                                                               state))))
-                  continuations))))
+    (if (eq? (exp1 expr) 'super)
+        (cps-return (unbox (get-instance-value-box (exp2 expr) 
+                                                   (hash-set
+                                                    (get-var-value-no-dot 'this state continuations)
+                                                    'class
+                                                    (hash-ref (get-var-value state (hash-ref (get-var-value state 'this) 
+                                                                                             'class))
+                                                              'super))
+                                                   state)))
+        ((lambda (value)
+           (if (eq? value 'null)
+             (error 'error "instance variable not initialized!")
+             value))
+         (M-value-cps (exp1 expr)
+                      state
+                      (lambda (v)
+                        (cps-return (unbox (get-instance-value-box (exp2 expr) 
+                                                                   v
+                                                                   state))))
+                      continuations)))))
 
 ;;get the value of intance variable var from an object closure
 ;;subtract the found index from the length of the field list, access this index in inst-vals
@@ -1097,7 +1106,7 @@
 ; Provide the interpret function for rackunit
 (provide interpret interpret)
 ;(parser "test")
-;(interpret "test" "C")
-(M-state-global (parser "test") initial-state)
+(interpret "test" "C")
+;(M-state-global (parser "test") initial-state)
 ;(hash-ref (get-var-value (M-state-global (parser "test") initial-state) 'A) 'methods)
 ;(get-body-class 'main 'A (M-state-global (parser "test") initial-state))
