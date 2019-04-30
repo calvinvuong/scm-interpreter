@@ -377,7 +377,7 @@
 
 ;;returns whether an expression is true or false
 (define M-boolean-cps
-  (lambda (expr state cps-return continuations)
+  (lambda (expr state type cps-return continuations)
     (cond
       [(null? expr)                       (error 'undefined "Incorrect number of arguments")]
       [(eq? expr 'true)                   (cps-return #t)]
@@ -385,30 +385,32 @@
       ;;otherwise, this is a variable
       [(not (list? expr))                 (cps-return (get-var-value state expr))]
       ;;or a function
-      [(eq? (get-operator expr) 'funcall) (cps-return (M-value-function expr state continuations))]
-      [(eq? (get-operator expr) '==)      (M-boolean-comparator expr state cps-return eq? continuations)]
+      [(eq? (get-operator expr) 'funcall) (cps-return (M-value-function expr state type continuations))]
+      [(eq? (get-operator expr) '==)      (M-boolean-comparator expr state type cps-return eq? continuations)]
       [(eq? (get-operator expr) '!=)      (M-boolean-comparator expr
                                                                 state
+                                                                type
                                                                 cps-return
                                                                 (lambda (a b)
                                                                   (not (eq? a b)))
                                                                 continuations)]
-      [(eq? (get-operator expr) '<)       (M-boolean-comparator expr state cps-return < continuations)]
-      [(eq? (get-operator expr) '>)       (M-boolean-comparator expr state cps-return > continuations)]
-      [(eq? (get-operator expr) '<=)      (M-boolean-comparator expr state cps-return <= continuations)]
-      [(eq? (get-operator expr) '>=)      (M-boolean-comparator expr state cps-return >= continuations)]
+      [(eq? (get-operator expr) '<)       (M-boolean-comparator expr state type cps-return < continuations)]
+      [(eq? (get-operator expr) '>)       (M-boolean-comparator expr state type cps-return > continuations)]
+      [(eq? (get-operator expr) '<=)      (M-boolean-comparator expr state type cps-return <= continuations)]
+      [(eq? (get-operator expr) '>=)      (M-boolean-comparator expr state type cps-return >= continuations)]
       [(eq? (get-operator expr) '&&)      (M-boolean-logic-operator
-                                            expr state
+                                            expr state type
                                             (lambda (a b)
                                               (and a b))
                                             cps-return continuations)]
       [(eq? (get-operator expr) '||)      (M-boolean-logic-operator
-                                            expr state
+                                            expr state type
                                             (lambda (a b)
                                               (or a b))
                                             cps-return continuations)]
       [(eq? (get-operator expr) '!)       (M-boolean-cps (exp1 expr)
                                                          state
+                                                         type
                                                          (lambda (v)
                                                            (cps-return (not v)))
                                                          continuations)]
@@ -416,23 +418,25 @@
 
 ;;calls M-boolean-cps
 (define M-boolean
-  (lambda (expr state continuations)
-    (M-boolean-cps expr state (lambda (v) v) continuations)))
+  (lambda (expr state type continuations)
+    (M-boolean-cps expr state type (lambda (v) v) continuations)))
 
 ;;abstraction for when M-boolean-cps is given an comparator (<, >, ==, etc) operation
 (define M-boolean-comparator
-  (lambda (expr state cps-return operation continuations)
-    (cps-return (operation (M-value (exp1 expr) state continuations)
-                           (M-value (exp2 expr) state continuations)))))
+  (lambda (expr state type cps-return operation continuations)
+    (cps-return (operation (M-value (exp1 expr) state type continuations)
+                           (M-value (exp2 expr) state type continuations)))))
 
 ;;abstraction for when M-boolean-cps is given a logic operation
 (define M-boolean-logic-operator
-  (lambda (expr state operation cps-return continuations)
+  (lambda (expr state type operation cps-return continuations)
     (M-boolean-cps (exp1 expr)
                     state
+                    type
                     (lambda (v1)
                       (M-boolean-cps (exp2 expr)
                                    state
+                                   type
                                    (lambda (v2)
                                      (cps-return (operation v1 v2)))
                                    continuations))
@@ -599,13 +603,13 @@
                        (box 
                          (if (eq? v 'null)
                            'null 
-                           (M-value v state continuations))))
+                           (M-value v state '() continuations)))) ;type here is dummy
                      (hash-ref closure 'inst-init-values))))))
 
 ;; returns a STATE whereas M-value-function returns a VALUE
 (define M-state-funcall
-  (lambda (expr state continuations)
-    (let ((x (M-value expr state continuations))) state)))
+  (lambda (expr state type continuations)
+    (let ((x (M-value expr state type continuations))) state)))
 
 ;; adds function definition to closure
 ;; returns a state
@@ -677,7 +681,7 @@
 
 ;;calls one of many M-state-** functions depending on nature of input
 (define M-state
-  (lambda (expr state continuations)
+  (lambda (expr state type continuations)
     (cond
       [(null? expr)                         state]
       ;; to handle if (true) or while (true)
@@ -686,18 +690,23 @@
       [(eq? (get-keyword expr) 'var)        (M-state (cdr expr)
                                                      (M-state-declare (car expr)
                                                                       state
+                                                                      type
                                                                       continuations)
+                                                     type
                                                      continuations)]
 
       [(eq? (get-keyword expr) '=)          (M-state (cdr expr)
                                                      (M-state-assign (car expr)
                                                                      state
+                                                                     type
                                                                      continuations)
+                                                     type
                                                      continuations)]
       ; a "goto" construct return
       [(eq? (get-keyword expr) 'return)     ((hash-ref continuations 'return)
                                                (M-state-return (car expr)
                                                                state
+                                                               type
                                                                continuations))]
       ; a "goto" construct break
       [(eq? (get-keyword expr) 'break)      ((hash-ref continuations 'break) '())]
@@ -705,17 +714,19 @@
       [(eq? (get-keyword expr) 'continue)   ((hash-ref continuations 'continue) '())]
       [(eq? (get-keyword expr) 'throw)      ((hash-ref continuations 'throw)
                                                (get-throw-value
-                                                expr state continuations))]
+                                                expr state type continuations))]
       ; this handles a nested function
       ; TODO We might not want to handle nesteds here
       ; should scan for nested funcs immediately when we enter the outer function
       [(eq? (get-keyword expr) 'function)   (M-state (cdr expr)
                                                      (M-state-function (car expr) state)
+                                                     type
                                                      continuations)]
 
       ; handles function calls that are not assigned to a var value
       [(eq? (get-keyword expr) 'funcall)   (M-state (cdr expr)
-                                                    (M-state-funcall (car expr) state continuations)
+                                                    (M-state-funcall (car expr) state type continuations)
+                                                    type
                                                     continuations)]
 
 
@@ -723,31 +734,39 @@
       [(eq? (get-keyword expr) 'if)         (M-state (cdr expr)
                                                      (M-state-if (car expr)
                                                                  state
+                                                                 type
                                                                  continuations)
-                                                      continuations)]
+                                                     type
+                                                     continuations)]
 
       [(eq? (get-keyword expr) 'while)      (M-state (cdr expr)
                                                      (call/cc
                                                       (lambda (br) ; br parameter: break continuation
                                                         (M-state-while (car expr)
                                                                        state
+                                                                       type
                                                                        (hash-set
                                                                          continuations
                                                                          'break
                                                                          (lambda (v) (br state))))))
-                                                      continuations)]
+                                                     type
+                                                     continuations)]
 
       [(eq? (get-keyword expr) 'begin)      (M-state (cdr expr)
                                                      (M-state-block (car expr)
                                                                     state
+                                                                    type
                                                                     continuations)
-                                                      continuations)]
+                                                     type
+                                                     continuations)]
 
       [(eq? (get-keyword expr) 'try)      (M-state (cdr expr)
                                                      (M-state-trycatchblock
                                                        (car expr)
                                                        state
+                                                       type
                                                        continuations)
+                                                     type
                                                      continuations)]
       [else                                 state])))
 
@@ -783,13 +802,14 @@
 
 ;;Updates state for a variable declaration
 (define M-state-declare
-  (lambda (expr state continuations)
+  (lambda (expr state type continuations)
     (cond
       ;[(var-declared (declare-var expr) (remove-last-layer state))
       ; (error 'error "Variable already declared!")]
       [(eq? (list-length expr) 3)                  (add-to-state (cons (declare-var expr)
                                                                        (list (M-value (caddr expr)
                                                                                       state
+                                                                                      type
                                                                                       continuations)))
                                                                  state)]
       [(not (eq? (list-length expr) 2))            (error 'error "Invalid declare expression.")]
