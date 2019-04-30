@@ -798,7 +798,7 @@
 
 ;; updates the state in variable assignment
 (define M-state-assign
-  (lambda (expr state continuations)
+  (lambda (expr state type continuations)
     (cond
       ;;can't just update binding in the state if we're setting the value of a dot
       [(and (list? (exp1 expr)) (eq? (car (exp1 expr)) 'dot))
@@ -830,9 +830,9 @@
 ;; return does not update state, so just pass control to M-value
 ;; checks if valid length
 (define M-state-return
-  (lambda (expr state continuations)
+  (lambda (expr state type continuations)
     (if (eq? (list-length expr) 2)
-        (M-value expr state continuations)
+        (M-value expr state type continuations)
         (error 'error "Invalid return."))))
 
 (define conditional
@@ -846,27 +846,31 @@
 (define rest-if cdddr) ; else if statements
 ;; update state if function
 (define M-state-if
-  (lambda (expr state continuations)
+  (lambda (expr state type continuations)
     (cond
       [(eq? (M-boolean (car (conditional expr))
                        state
+                       type
                        continuations)
             #t)
        (M-state (body expr)
                 (M-state (conditional expr)
                          state
+                         type
                          continuations)
                 continuations)]
       [(> (list-length expr) 3)
        (M-state (rest-if expr)
-                (M-state (conditional expr) state continuations)
+                (M-state (conditional expr) state type continuations)
+                type
                 continuations)]
       [else (M-state (conditional expr)
+                     type
                      state
                      continuations)])))
 
 (define M-state-trycatchblock
-  (lambda (expr state continuations)
+  (lambda (expr state type continuations)
     (if (and (null? (catch-block expr))
              (null? (finally-block expr)))
       (error 'error "Must have either catch or finally block")
@@ -875,12 +879,14 @@
             (M-state-try
               (try-block expr)
               state
+              type
               (hash-set*
                 continuations
                 'return
                 (lambda (return-statement)
                   (M-state-finally (finally-expression expr)
                                    state
+                                   type
                                    (hash-set* continuations
                                               'do-at-end
                                               (hash-ref continuations 'return)
@@ -891,6 +897,7 @@
                 (lambda (v)
                   (M-state-finally (finally-expression expr)
                                    (remove-layer state)
+                                   type
                                    (hash-set* continuations
                                               'do-at-end
                                               (hash-ref continuations 'break)
@@ -900,6 +907,7 @@
                 (lambda (v)
                   (M-state-finally (finally-expression expr)
                                    (remove-layer state)
+                                   type
                                    (hash-set* continuations
                                               'do-at-end
                                               (hash-ref continuations 'continue)
@@ -911,6 +919,7 @@
           (lambda (return-statement)
             (M-state-finally (finally-expression expr)
                              state
+                             type
                              (hash-set* continuations
                                         'do-at-end
                                         (hash-ref continuations 'return)
@@ -920,6 +929,7 @@
           (lambda (v)
             (M-state-finally (finally-expression expr)
                              (remove-layer state)
+                             type
                              (hash-set* continuations
                                         'do-at-end
                                         (hash-ref continuations 'break)
@@ -929,6 +939,7 @@
           (lambda (v)
             (M-state-finally (finally-expression expr)
                              (remove-layer state)
+                             type
                              (hash-set* continuations
                                         'do-at-end
                                         (hash-ref continuations 'continue)
@@ -938,6 +949,7 @@
           (lambda (throw-statement)
             (M-state-finally (finally-expression expr)
                              (remove-layer state)
+                             type
                              (hash-set* continuations
                                         'do-at-end
                                         (hash-ref continuations 'throw)
@@ -945,11 +957,12 @@
                                         (list 'throw throw-statement)))))))))
 
 (define M-state-try
-  (lambda (expr state continuations)
+  (lambda (expr state type continuations)
     (call/cc
       (lambda (new-throw)
         (M-state-trycatchexpr (cons 'begin expr)
                               state
+                              type
                               (hash-set continuations
                                         'throw
                                         (lambda (throw-value)
@@ -971,11 +984,12 @@
       (cadr (finally-block expr)))))
 
 (define M-state-catch
-  (lambda (expr state continuations)
+  (lambda (expr state type continuations)
     (cond
       ;;if there was no catch block
       [(null? (catch-block expr)) (M-state-finally (finally-expression expr)
                                                    state
+                                                   type
                                                    (hash-set* continuations
                                                               'do-at-end
                                                               (lambda (v) v)
@@ -987,6 +1001,7 @@
       ;;so this case is the same as if we didn't have a catch block
        [(list? (car state)) (M-state-finally (finally-expression expr)
                                             state
+                                            type
                                             (hash-set* continuations
                                                        'do-at-end
                                                        (lambda (v) v)
@@ -999,7 +1014,9 @@
                                                                         (list (car state)))
                                                                   (cadr state))
                                                                   ;(remove-layer (cadr state)))
+                                                    type
                                                     continuations)
+                             type
                              (hash-set* continuations
                                         'do-at-end
                                         (lambda (v) v)
@@ -1007,16 +1024,18 @@
                                         'null))])))
 
 (define M-state-catch-recurse
-  (lambda (expr state continuations)
-    (M-state-trycatchexpr (cons 'begin expr) state continuations)))
+  (lambda (expr state type continuations)
+    (M-state-trycatchexpr (cons 'begin expr) state type continuations)))
 
 (define M-state-finally-recurse
-  (lambda (expr state continuations)
+  (lambda (expr state type continuations)
     (cond
       [(not (null? expr)) (M-state-finally-recurse (cdr expr)
                                                    (M-state (list (car expr))
                                                             state
+                                                            type
                                                             continuations)
+                                                   type
                                                    continuations)]
       [(eq? (hash-ref continuations 'do-at-end-name) 'null)
        ((hash-ref continuations 'do-at-end) state)]
@@ -1026,8 +1045,9 @@
                  'return))
        ((hash-ref continuations 'do-at-end)
         (M-state-return (list 'return (cadr (hash-ref continuations 'do-at-end-name)))
-                                                            state
-                                                            continuations))]
+                        state
+                        type
+                        continuations))]
       [(and (list? (hash-ref continuations 'do-at-end-name))
             (eq? (car (hash-ref continuations 'do-at-end-name))
                  'throw))
@@ -1036,17 +1056,18 @@
       [(eq? (hash-ref continuations 'do-at-end-name) 'break) ((hash-ref continuations 'do-at-end) state)])))
 
 (define M-state-finally
-  (lambda (expr state continuations)
+  (lambda (expr state type continuations)
     (remove-layer (M-state-finally-recurse
-                    expr (push-layer state) continuations))))
+                    expr (push-layer state) type continuations))))
 
 ;;Like M-state-block, but we don't overwrite the continue continuation.
 ;;Used for what would be the 'block' inside try and catch
 (define M-state-trycatchexpr
-  (lambda (expr state continuations)
+  (lambda (expr state type continuations)
     (remove-layer
           (M-state (block-body expr)
                    (push-layer state)
+                   type
                    continuations))))
 
 (define try-block cadr)
@@ -1055,14 +1076,16 @@
 
 ;; update state while loop
 (define M-state-while
-  (lambda (expr state continuations)
+  (lambda (expr state type continuations)
     (if (eq? (M-boolean (car (conditional expr)) state continuations) #t)
         (M-state-while expr
                        (M-state (body expr)
                                 (M-state (conditional expr) state continuations)
+                                type
                                 continuations)
+                       type
                        continuations)
-        (M-state (conditional expr) state continuations))))
+        (M-state (conditional expr) state type continuations))))
 
 (define block-body cdr)
 
@@ -1074,6 +1097,7 @@
         (lambda (cont) ; continuation for continue
           (M-state (block-body expr)
                    (push-layer state)
+                   type
                    (hash-set continuations
                              'continue
                              (lambda (v) (cont (push-layer state))))))))))
@@ -1095,8 +1119,8 @@
 (define get-keyword caar)
 
 (define get-throw-value
-  (lambda (expr state continuations)
-    (M-value (cadar expr) state continuations)))
+  (lambda (expr state type continuations)
+    (M-value (cadar expr) state type continuations)))
 
 ; M-state-declare
 (define declare-var cadr)
