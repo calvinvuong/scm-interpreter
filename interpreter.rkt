@@ -88,9 +88,9 @@
       ;; so look it up in the state
       [(eq? expr 'false)                (cps-return #f)]
       [(eq? expr 'true)                 (cps-return #t)]
-      
+
       ;; variable
-      
+
       [(not (list? expr))               (cps-return (get-var-value-no-dot expr state type continuations))]
       ;; if next exprression's length is 2, it's unary -
       [(and (eq? (list-length expr) 2)
@@ -144,7 +144,7 @@
     (if (eq? (find-box (get-func-name expr) state) 'none) ; If true, method is not local.
         (M-value-function (add-dot-this expr) state type continuations)
         (M-value-function-nested expr state type (get-var-value state (get-func-name expr)) continuations))))
-        
+
 
 ;; takes a  expr like (funcall multiply 3 2)
 ;; returns a expr like (funcall (dot this multiply) 3 2)
@@ -178,7 +178,7 @@
 ;; macros for parsing funcall w/o dot operator
 (define get-func-name cadr)
 (define get-func-params cddr)
-    
+
 ;; M-value for evaluating a function call with the dot operator
 ;; This expects a dot expression in the expr
 (define M-value-function
@@ -199,9 +199,9 @@
                             state) ;hacky
                     type
                     (hash-set* continuations 'return r))))
-         (get-method-closure (get-method-call-name expr) 
-                             (get-class-name (get-dot-lhs expr) state type continuations) 
-                             state 
+         (get-method-closure (get-method-call-name expr)
+                             (get-class-name (get-dot-lhs expr) state type continuations)
+                             state
                              continuations)
          (get-instance-closure (get-dot-lhs expr) state type continuations)  ;STUB for the instance closure
          )))))
@@ -257,10 +257,10 @@
   (lambda (method-name class state)
     (car (filter (lambda (h) (eq? (hash-ref h 'name) method-name))
                  (hash-ref (get-var-value state class) 'methods)))))
-  
+
 ;; gets the closure of an instance from the state
 ;; might be another expression, so evaluate it first
-;; if we're calling super.method(), use this.method() 
+;; if we're calling super.method(), use this.method()
 (define get-instance-closure
   (lambda (instance-name state type continuations)
     (cond
@@ -306,7 +306,7 @@
                                       expr
                                       (hash-ref closure 'class)))
                                 (get-var-value-no-dot expr state type continuations))])))
-                            
+
 (define get-actual-params cddr)
 
 ;;abstraction for when M-value-cps is given an arithmetic operation
@@ -330,11 +330,11 @@
 (define M-value-dot
   (lambda (expr state type cps-return continuations)
     (if (eq? (exp1 expr) 'super)
-        (cps-return (unbox (get-instance-value-box (exp2 expr) 
+        (cps-return (unbox (get-instance-value-box (exp2 expr)
                                                    (hash-set
                                                     (get-var-value-no-dot 'this state type continuations)
                                                     'class
-                                                    (hash-ref (get-var-value state (hash-ref (get-var-value state 'this) 
+                                                    (hash-ref (get-var-value state (hash-ref (get-var-value state 'this)
                                                                                              'class))
                                                               'super))
                                                    state)))
@@ -346,7 +346,7 @@
                       state
                       type
                       (lambda (v)
-                        (cps-return (unbox (get-instance-value-box (exp2 expr) 
+                        (cps-return (unbox (get-instance-value-box (exp2 expr)
                                                                    v
                                                                    state))))
                       continuations)))))
@@ -357,11 +357,11 @@
   (lambda (var object-closure state)
     ((lambda (inst-vars)
      (list-ref (hash-ref object-closure 'inst-vals)
-               (- (- (length inst-vars) 
-                     (get-var-index var 
+               (- (- (length inst-vars)
+                     (get-var-index var
                                     inst-vars))
                   1)))
-     (hash-ref (get-var-value state 
+     (hash-ref (get-var-value state
                               (hash-ref object-closure 'class))
                'inst-vars))))
 
@@ -551,7 +551,7 @@
   (lambda (cls-body class-name closure)
     (cond
       [(null? cls-body) (make-constructor closure)]
-      ;;uninitialized variables: inst-vars stores the variable names - put these in backwards. 
+      ;;uninitialized variables: inst-vars stores the variable names - put these in backwards.
       [(and (eq? (get-keyword cls-body) 'var) (eq? (list-length (car cls-body)) 2))
        (make-class-closure-body (cdr cls-body) class-name (hash-set* closure
                                                             'inst-vars
@@ -599,10 +599,10 @@
     (hash-set closure
               'const
               (lambda (state continuations)
-                (map (lambda (v) 
-                       (box 
+                (map (lambda (v)
+                       (box
                          (if (eq? v 'null)
-                           'null 
+                           'null
                            (M-value v state '() continuations)))) ;type here is dummy
                      (hash-ref closure 'inst-init-values))))))
 
@@ -822,28 +822,30 @@
     (cond
       ;;can't just update binding in the state if we're setting the value of a dot
       [(and (list? (exp1 expr)) (eq? (car (exp1 expr)) 'dot))
-       (assign-instance-var expr state continuations)]
+       (assign-instance-var expr state type continuations)]
       [(eq? (find-box (exp1 expr) state) 'none) ;not in local environment, therefore is instance var
-       (assign-instance-var (add-dot-this expr) state continuations)]
+       (assign-instance-var (add-dot-this expr) state type continuations)]
       ;; else it is in local environment
       [(eq? (list-length expr) 3) (update-binding (exp1 expr)
                                                   (M-value (exp2 expr)
                                                            state
+                                                           type
                                                            continuations)
                                                   state)]
       [else (error 'error "Invalid assign.")])))
 
-  
+
 ;; update the value of an instance variable
 ;; expr is (= (dot x b) val) - x is object, b is field
 (define assign-instance-var
-  (lambda (expr state continuations)
+  (lambda (expr state type continuations)
     ((lambda (value-box)
-        (begin (set-box! value-box (M-value (exp2 expr) state continuations))
+        (begin (set-box! value-box (M-value (exp2 expr) state type continuations))
                                                           state))
      (get-instance-value-box (exp2 (exp1 expr))
                              (M-value (exp1 (exp1 expr))
                                       state
+                                      type
                                       continuations)
                              state))))
 
@@ -878,6 +880,7 @@
                          state
                          type
                          continuations)
+                type
                 continuations)]
       [(> (list-length expr) 3)
        (M-state (rest-if expr)
@@ -885,8 +888,8 @@
                 type
                 continuations)]
       [else (M-state (conditional expr)
-                     type
                      state
+                     type
                      continuations)])))
 
 (define M-state-trycatchblock
@@ -933,6 +936,7 @@
                                               (hash-ref continuations 'continue)
                                               'do-at-end-name
                                               'continue)))))
+            type
         (hash-set*
           continuations
           'return
@@ -1097,10 +1101,10 @@
 ;; update state while loop
 (define M-state-while
   (lambda (expr state type continuations)
-    (if (eq? (M-boolean (car (conditional expr)) state continuations) #t)
+    (if (eq? (M-boolean (car (conditional expr)) state type continuations) #t)
         (M-state-while expr
                        (M-state (body expr)
-                                (M-state (conditional expr) state continuations)
+                                (M-state (conditional expr) state type continuations)
                                 type
                                 continuations)
                        type
@@ -1111,7 +1115,7 @@
 
 ;; state with blocks - first add a new layer, then remove it
 (define M-state-block
-  (lambda (expr state continuations)
+  (lambda (expr state type continuations)
     (remove-layer
       (call/cc
         (lambda (cont) ; continuation for continue
@@ -1150,7 +1154,7 @@
 ; Provide the interpret function for rackunit
 (provide interpret interpret)
 ;(parser "test")
-(interpret "test" "C")
+;(interpret "tests/test4-11" "List")
 ;(M-state-global (parser "test") initial-state)
 ;(hash-ref (get-var-value (M-state-global (parser "test") initial-state) 'A) 'methods)
 ;(get-body-class 'main 'A (M-state-global (parser "test") initial-state))
