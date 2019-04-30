@@ -3,6 +3,38 @@
 (require rackunit "interpreter.rkt")
 (require rackunit/text-ui)
 
+;; Part 4 tests
+(define part4-tests
+  (test-suite
+    "Tests for part 4"
+    (test-equal?    "Part 4 test 1"
+                    (interpret "tests/test4-1" "A")         15)
+    (test-equal?    "Part 4 test 2"
+                    (interpret "tests/test4-2" "A")         12)
+    (test-equal?    "Part 4 test 3"
+                    (interpret "tests/test4-3" "A")         125)
+    (test-equal?    "Part 4 test 4"
+                    (interpret "tests/test4-4" "A")         36)
+    (test-equal?    "Part 4 test 5"
+                    (interpret "tests/test4-5" "A")         54)
+    (test-equal?    "Part 4 test 6"
+                    (interpret "tests/test4-6" "A")         110)
+    (test-equal?    "Part 4 test 7"
+                    (interpret "tests/test4-7" "C")         26)
+    (test-equal?    "Part 4 test 8"
+                    (interpret "tests/test4-8" "Square")    117)
+    (test-equal?    "Part 4 test 9"
+                    (interpret "tests/test4-9" "Square")    32)
+    (test-equal?    "Part 4 test 10"
+                    (interpret "tests/test4-10" "List")     15)
+    (test-equal?    "Part 4 test 11"
+                    (interpret "tests/test4-11" "List")     123456)
+    (test-equal?    "Part 4 test 12"
+                    (interpret "tests/test4-12" "List")     5285)
+    (test-equal?    "Part 4 test 13"
+                    (interpret "tests/test4-13" "C")        -716)
+    ))
+
 ;; Run suite of tests for part 3
 (define part3-tests
   (test-suite
@@ -94,4 +126,4 @@
                     exn:fail? (interpret "tests/test2-19"))
     ))
 
-(run-tests part3-tests)
+(run-tests part4-tests)
