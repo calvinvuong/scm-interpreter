@@ -888,8 +888,8 @@
                 type
                 continuations)]
       [else (M-state (conditional expr)
-                     type
                      state
+                     type
                      continuations)])))
 
 (define M-state-trycatchblock
@@ -936,6 +936,7 @@
                                               (hash-ref continuations 'continue)
                                               'do-at-end-name
                                               'continue)))))
+            type
         (hash-set*
           continuations
           'return
@@ -1100,10 +1101,10 @@
 ;; update state while loop
 (define M-state-while
   (lambda (expr state type continuations)
-    (if (eq? (M-boolean (car (conditional expr)) state continuations) #t)
+    (if (eq? (M-boolean (car (conditional expr)) state type continuations) #t)
         (M-state-while expr
                        (M-state (body expr)
-                                (M-state (conditional expr) state continuations)
+                                (M-state (conditional expr) state type continuations)
                                 type
                                 continuations)
                        type
@@ -1153,7 +1154,7 @@
 ; Provide the interpret function for rackunit
 (provide interpret interpret)
 ;(parser "test")
-(interpret "tests/test4-9" "Square")
+;(interpret "tests/test4-11" "List")
 ;(M-state-global (parser "test") initial-state)
 ;(hash-ref (get-var-value (M-state-global (parser "test") initial-state) 'A) 'methods)
 ;(get-body-class 'main 'A (M-state-global (parser "test") initial-state))
