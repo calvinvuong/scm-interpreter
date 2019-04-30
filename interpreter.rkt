@@ -351,7 +351,9 @@
                         (cps-return (unbox (get-instance-value-box (exp2 expr)
                                                                    v
                                                                    state
-                                                                   type))))
+                                                                   (if (eq? (exp1 expr) 'this)
+                                                                       type
+                                                                       (hash-ref v 'class))))))
                       continuations)))))
 
 ;;get the value of intance variable var from an object closure
@@ -1159,7 +1161,7 @@
 ; Provide the interpret function for rackunit
 (provide interpret interpret)
 ;(parser "test")
-(interpret "test" "C")
+(interpret "tests/test4-13" "C")
 ;(M-state-global (parser "test") initial-state)
 ;(hash-ref (get-var-value (M-state-global (parser "test") initial-state) 'A) 'methods)
 ;(get-body-class 'main 'A (M-state-global (parser "test") initial-state))
